@@ -1,0 +1,10 @@
+{
+  "name": "bartrans",
+  "compatibility_date": "2025-06-05",
+  "assets": {
+    "directory": "./dist"
+  },
+  "routes": [
+    { "pattern": "bartrans.met4.org", "custom_domain": true }
+  ]
+}

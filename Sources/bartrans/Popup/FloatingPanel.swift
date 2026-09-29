@@ -46,10 +46,18 @@ final class FloatingPanel: NSPanel {
     func show(centeredAt x: CGFloat, top: CGFloat, makeKey: Bool) {
         let size = contentSizeKnown ? frame.size : (contentView?.fittingSize ?? frame.size)
         setFrame(clamped(NSRect(x: x - size.width / 2, y: top - size.height, width: size.width, height: size.height)), display: true)
+        let wasVisible = isVisible
+        if !wasVisible { alphaValue = 0 }
         if makeKey {
             makeKeyAndOrderFront(nil)
         } else {
             orderFrontRegardless()
+        }
+        if !wasVisible {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                animator().alphaValue = 1
+            }
         }
     }
 

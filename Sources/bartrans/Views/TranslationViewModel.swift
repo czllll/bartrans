@@ -40,6 +40,33 @@ final class TranslationViewModel: ObservableObject {
         return direction.label(primary: settings.primary, secondary: settings.secondary)
     }
 
+    /// 完整语言名，例如"英文 → 简体中文"
+    var directionFullLabel: String {
+        if let resolvedLanguages, !inputText.isEmpty {
+            let source = resolvedLanguages.source.map { AppLanguage.named($0).name } ?? "自动"
+            return "\(source) → \(AppLanguage.named(resolvedLanguages.target).name)"
+        }
+        return direction.menuLabel(primary: settings.primary, secondary: settings.secondary)
+    }
+
+    /// 引擎的简短说明：Apple 离线，或 LLM 的模型名
+    var engineCaption: String {
+        switch selectedEngine {
+        case .system:
+            return "Apple 离线"
+        case .llm:
+            let model = settings.llmProvider == .anthropic ? settings.anthropicModel : settings.openAIModel
+            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? settings.llmProvider.label : trimmed
+        }
+    }
+
+    /// 查词模式下 LLM 输出的结构化结果（音标 / 义项 / 例句）
+    var wordEntry: WordEntry? {
+        guard isWordMode, selectedEngine == .llm, !outputText.isEmpty else { return nil }
+        return WordEntry.parse(outputText)
+    }
+
     /// 打开面板时用剪贴板内容预填输入框。
     /// 只有剪贴板自上次以来变过才覆盖，避免把用户正在编辑的内容冲掉。
     func prefillFromClipboard() {
@@ -141,5 +168,69 @@ final class TranslationViewModel: ObservableObject {
     func speakResult() {
         guard !outputText.isEmpty else { return }
         Speaker.shared.speak(outputText, language: resolvedLanguages?.target)
+    }
+}
+
+/// 把 LLM 的词典式输出拆成音标、义项、例句，方便排版。
+/// 解析是尽力而为的：认不出的行都当作普通义项，流式输出到一半时也能正常显示。
+struct WordEntry {
+    struct Sense: Hashable {
+        var partOfSpeech: String?
+        var meaning: String
+    }
+
+    var phonetic: String?
+    var senses: [Sense] = []
+    var example: (sentence: String, translation: String?)?
+
+    private static let posPattern = try! NSRegularExpression(
+        pattern: "^((?:[a-zA-Z]{1,6}\\.\\s*)+|[名动形副介连代数量助叹][词]?\\.?)\\s*(.+)$"
+    )
+
+    static func parse(_ text: String) -> WordEntry {
+        var entry = WordEntry()
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        for (index, rawLine) in lines.enumerated() {
+            let line = rawLine.replacingOccurrences(of: "**", with: "")
+            if index == 0, isPhonetic(line) {
+                entry.phonetic = line
+                continue
+            }
+            if let dash = line.range(of: " — ") ?? line.range(of: " - ") ?? line.range(of: "——") {
+                let sentence = String(line[..<dash.lowerBound]).trimmingCharacters(in: .whitespaces)
+                let translation = String(line[dash.upperBound...]).trimmingCharacters(in: .whitespaces)
+                entry.example = (strip(sentence), translation.isEmpty ? nil : translation)
+                continue
+            }
+            let range = NSRange(line.startIndex..., in: line)
+            if let match = posPattern.firstMatch(in: line, range: range),
+               let posRange = Range(match.range(at: 1), in: line),
+               let meaningRange = Range(match.range(at: 2), in: line) {
+                entry.senses.append(Sense(
+                    partOfSpeech: line[posRange].trimmingCharacters(in: .whitespaces),
+                    meaning: String(line[meaningRange])
+                ))
+            } else {
+                entry.senses.append(Sense(partOfSpeech: nil, meaning: line))
+            }
+        }
+        return entry
+    }
+
+    private static func isPhonetic(_ line: String) -> Bool {
+        guard line.count <= 60 else { return false }
+        return line.contains("/") || line.contains("[") || line.hasPrefix("音标") || line.hasPrefix("读音")
+            || line.unicodeScalars.contains { (0x0250...0x02AF).contains($0.value) }
+    }
+
+    private static func strip(_ text: String) -> String {
+        var result = text
+        for prefix in ["例句：", "例句:", "例：", "例:", "Example:"] where result.hasPrefix(prefix) {
+            result = String(result.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        return result
     }
 }

@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 340, height: 430)
+        popover.contentSize = TranslatePanelView.size
         let panel = TranslatePanelView(viewModel: viewModel) { [weak self] in
             self?.openSettings()
         }

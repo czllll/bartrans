@@ -18,7 +18,10 @@ private extension AnyTransition {
     }
 }
 
+/// 菜单栏弹出的翻译面板：手动输入 / 粘贴翻译。
 struct TranslatePanelView: View {
+    static let size = CGSize(width: 360, height: 480)
+
     @ObservedObject var viewModel: TranslationViewModel
     @State private var showHistory = false
     @State private var justCopied = false
@@ -34,13 +37,13 @@ struct TranslatePanelView: View {
                     viewModel.outputText = entry.translatedText
                     withAnimation(.easeInOut(duration: 0.3)) { showHistory = false }
                 }
-                .frame(width: 340)
                 .transition(.flip)
             } else {
                 translateContent
                     .transition(.flip)
             }
         }
+        .frame(width: Self.size.width, height: Self.size.height)
         .onAppear {
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .focusTranslatorInput, object: nil)
@@ -49,170 +52,187 @@ struct TranslatePanelView: View {
     }
 
     private var translateContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             header
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
 
-            engineRow
-
-            labeledCard(title: "输入", accent: false) {
-                SubmitTextView(text: $viewModel.inputText) { viewModel.translate() }
-                    .frame(height: 84)
+            VStack(spacing: 8) {
+                inputCard
+                directionRow
+                outputCard
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
 
-            directionDivider
-
-            labeledCard(title: "翻译结果", accent: !viewModel.outputText.isEmpty) {
-                resultContent
-            }
-
-            if let error = viewModel.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
-
-            actionRow
+            footer
         }
-        .padding(14)
-        .frame(width: 340)
     }
+
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 8) {
-            BarTransLogo(size: 24)
+            BarTransLogo(size: 22)
             Text("bartrans")
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
             Spacer()
-            iconButton("clock.arrow.circlepath", help: "历史记录") {
+            IconButton(systemName: "clock.arrow.circlepath", help: "历史记录") {
                 withAnimation(.easeInOut(duration: 0.3)) { showHistory = true }
             }
-            iconButton("gearshape", help: "设置") { onOpenSettings() }
+            IconButton(systemName: "gearshape", help: "设置") { onOpenSettings() }
         }
     }
 
-    private func iconButton(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12))
-                .frame(width: 22, height: 22)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .background(Color.secondary.opacity(0.001)) // 撑满可点击区域
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .help(help)
-    }
+    // MARK: - Input
 
-    private var engineRow: some View {
-        Picker("", selection: $viewModel.selectedEngine) {
-            ForEach(EngineKind.allCases) { engine in
-                Text(engine.label).tag(engine)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .onChange(of: viewModel.selectedEngine) { viewModel.retranslateIfNeeded() }
-    }
-
-    private var directionDivider: some View {
-        HStack(spacing: 6) {
-            Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
-            Button {
-                viewModel.toggleDirection()
-                viewModel.retranslateIfNeeded()
-            } label: {
-                Label(viewModel.directionLabel, systemImage: "arrow.up.arrow.down")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
-        }
-    }
-
-    @ViewBuilder
-    private func labeledCard<Content: View>(title: String, accent: Bool, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            content()
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(accent ? Color.accentColor.opacity(0.08) : Color(nsColor: .textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(accent ? Color.accentColor.opacity(0.3) : Color.secondary.opacity(0.2))
-                )
-        }
-    }
-
-    private var resultContent: some View {
-        ZStack(alignment: .topTrailing) {
-            ScrollView {
-                Text(viewModel.outputText.isEmpty ? "翻译结果将显示在这里" : viewModel.outputText)
+    private var inputCard: some View {
+        ZStack(alignment: .topLeading) {
+            SubmitTextView(text: $viewModel.inputText) { viewModel.translate() }
+            if viewModel.inputText.isEmpty {
+                Text("输入或粘贴要翻译的文字…")
                     .font(.system(size: 13))
-                    .textSelection(.enabled)
-                    .foregroundStyle(viewModel.outputText.isEmpty ? .secondary : .primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 28))
-            }
-            .frame(height: 84)
-
-            if !viewModel.outputText.isEmpty {
-                Button {
-                    viewModel.copyResult()
-                    flashCopied()
-                } label: {
-                    Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11))
-                        .foregroundStyle(justCopied ? .green : .secondary)
-                        .padding(6)
-                }
-                .buttonStyle(.plain)
-                .help("复制翻译结果")
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .allowsHitTesting(false)
             }
         }
+        .frame(height: 130)
+        .overlay(alignment: .bottomTrailing) {
+            if !viewModel.inputText.isEmpty {
+                IconButton(systemName: "xmark.circle.fill", help: "清空", size: 11, tint: Color.secondary.opacity(0.6)) {
+                    viewModel.inputText = ""
+                    viewModel.outputText = ""
+                    viewModel.errorMessage = nil
+                    NotificationCenter.default.post(name: .focusTranslatorInput, object: nil)
+                }
+                .padding(4)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .fill(Color(nsColor: .textBackgroundColor).opacity(0.75))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+        )
     }
 
-    private var actionRow: some View {
-        HStack {
-            if viewModel.isTranslating {
-                ProgressView().controlSize(.small)
-                Text("翻译中…")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(shortcutHint)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+    private var directionRow: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+            DirectionMenu(viewModel: viewModel)
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+        }
+        .frame(height: 18)
+    }
+
+    // MARK: - Output
+
+    private var outputCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if let error = viewModel.errorMessage {
+                    Label(error, systemImage: "exclamationmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else if viewModel.isTranslating && viewModel.outputText.isEmpty {
+                    ShimmerLines()
+                        .frame(maxHeight: .infinity, alignment: .top)
+                } else if viewModel.outputText.isEmpty {
+                    Text("译文会显示在这里")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    ScrollView {
+                        Text(viewModel.outputText)
+                            .font(.system(size: 14))
+                            .lineSpacing(3)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
             }
+            .padding(.horizontal, 11)
+            .padding(.top, 9)
+
+            if !viewModel.outputText.isEmpty && viewModel.errorMessage == nil {
+                HStack(spacing: 0) {
+                    Spacer()
+                    IconButton(systemName: "speaker.wave.2", help: "朗读译文", size: 11) { viewModel.speakResult() }
+                    IconButton(
+                        systemName: justCopied ? "checkmark" : "doc.on.doc",
+                        help: "复制译文",
+                        size: 11,
+                        tint: justCopied ? .green : .secondary
+                    ) {
+                        viewModel.copyResult()
+                        justCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { justCopied = false }
+                    }
+                }
+                .padding(4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .fill(Theme.ink.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .strokeBorder(Theme.ink.opacity(0.12), lineWidth: 0.5)
+        )
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            EngineMenu(viewModel: viewModel)
 
             Spacer()
+
+            Text(shortcutHint)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
 
             Button {
                 viewModel.translate()
             } label: {
-                Label("翻译", systemImage: "return")
-                    .font(.system(size: 12, weight: .medium))
+                HStack(spacing: 4) {
+                    Text("翻译")
+                    Image(systemName: "return")
+                        .font(.system(size: 9, weight: .bold))
+                        .opacity(0.7)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background(Capsule().fill(Theme.ink))
+                .contentShape(Capsule())
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
+            .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 44)
+        .background(Color.primary.opacity(0.035))
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 0.5)
         }
     }
 
     private var shortcutHint: String {
         let hotKey = viewModel.settings.hotKey
-        let prefix = hotKey == .none ? "" : "\(hotKey.label.replacingOccurrences(of: " ", with: "")) 划词翻译 · "
-        return prefix + "↩ 翻译 · ⇧↩ 换行"
-    }
-
-    private func flashCopied() {
-        justCopied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            justCopied = false
-        }
+        guard hotKey != .none else { return "⇧↩ 换行" }
+        return "\(hotKey.label.replacingOccurrences(of: " ", with: "")) 划词翻译"
     }
 }

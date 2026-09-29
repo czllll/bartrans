@@ -239,7 +239,10 @@ final class AppSettings: ObservableObject {
             .appendingPathComponent("Library/Containers/\(bundleID)/Data/Library/Preferences/\(bundleID).plist")
         guard let legacy = NSDictionary(contentsOf: containerPlist) as? [String: Any] else { return }
 
-        for (key, value) in legacy where key.hasPrefix("com.transpop.") && defaults.object(forKey: key) == nil {
+        // NSStatusItem 开头的是菜单栏图标位置：不迁移的话图标会出现在最左边，
+        // 容易被刘海或 Hidden Bar 这类菜单栏管理工具藏起来
+        for (key, value) in legacy
+        where (key.hasPrefix("com.transpop.") || key.hasPrefix("NSStatusItem")) && defaults.object(forKey: key) == nil {
             defaults.set(value, forKey: key)
         }
     }

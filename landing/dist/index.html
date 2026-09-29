@@ -3,55 +3,51 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>bartrans — 挂在菜单栏里的翻译工具</title>
-<meta name="description" content="bartrans：一个极致轻量、100% 原生的 macOS 菜单栏翻译工具。系统离线翻译 + LLM（Anthropic / OpenAI 兼容）双引擎，隐私优先，无第三方依赖。" />
+<title>bartrans — 选中即译</title>
+<meta name="description" content="bartrans：macOS 全局划词翻译 / 查词工具。在任意 App 选中文字即可翻译，支持 Apple 离线翻译与 LLM（Anthropic / OpenAI 兼容），开源免费。" />
+<link rel="icon" href="icon.png" />
 <style>
   :root {
-    --bg: #eef1f7;
+    --bg: #f5f4f0;
     --surface: #ffffff;
-    --surface-2: #f7f8fb;
-    --ink: #14161c;
-    --ink-muted: #5b6270;
-    --ink-faint: #8991a0;
-    --hairline: rgba(20, 22, 34, 0.10);
-    --hairline-strong: rgba(20, 22, 34, 0.16);
-    --accent: #4a82f8;
-    --accent-ink: #ffffff;
-    --accent-wash: rgba(74, 130, 248, 0.10);
-    --shadow-pop: 0 2px 4px rgba(16,18,30,0.06), 0 20px 44px rgba(16,18,30,0.14);
-    --bar-blur: saturate(180%) blur(16px);
-    --mono: ui-monospace, "SF Mono", "Menlo", "Cascadia Code", monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    --surface-2: #f0efea;
+    --ink: #17182a;
+    --ink-muted: #5c5e70;
+    --ink-faint: #8d8f9e;
+    --hairline: rgba(23, 24, 42, 0.10);
+    --hairline-strong: rgba(23, 24, 42, 0.18);
+    --brand: #33409e;
+    --brand-deep: #1c215c;
+    --brand-text: #33409e;
+    --hl: #ffcc40;
+    --hl-soft: rgba(255, 204, 64, 0.45);
+    --shadow: 0 1px 2px rgba(20,20,40,0.06), 0 18px 48px rgba(20,20,40,0.14);
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    --serif: "New York", "Iowan Old Style", Georgia, "Songti SC", serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #101114;
-      --surface: #191a1f;
-      --surface-2: #202126;
-      --ink: #eef0f4;
-      --ink-muted: #9aa1ac;
-      --ink-faint: #6b7180;
-      --hairline: rgba(255, 255, 255, 0.09);
-      --hairline-strong: rgba(255, 255, 255, 0.15);
-      --accent: #6b9bff;
-      --accent-ink: #0c1220;
-      --accent-wash: rgba(107, 155, 255, 0.14);
-      --shadow-pop: 0 2px 4px rgba(0,0,0,0.3), 0 24px 50px rgba(0,0,0,0.5);
+    :root:not([data-theme="light"]) {
+      --bg: #111218;
+      --surface: #1b1c24;
+      --surface-2: #23242e;
+      --ink: #eeeff5;
+      --ink-muted: #a2a4b4;
+      --ink-faint: #6f7182;
+      --hairline: rgba(255,255,255,0.09);
+      --hairline-strong: rgba(255,255,255,0.16);
+      --brand: #4a5bd4;
+      --brand-text: #a4adff;
+      --hl-soft: rgba(255, 204, 64, 0.30);
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 56px rgba(0,0,0,0.55);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #101114; --surface: #191a1f; --surface-2: #202126;
-    --ink: #eef0f4; --ink-muted: #9aa1ac; --ink-faint: #6b7180;
-    --hairline: rgba(255,255,255,0.09); --hairline-strong: rgba(255,255,255,0.15);
-    --accent: #6b9bff; --accent-ink: #0c1220; --accent-wash: rgba(107,155,255,0.14);
-    --shadow-pop: 0 2px 4px rgba(0,0,0,0.3), 0 24px 50px rgba(0,0,0,0.5);
-  }
-  :root[data-theme="light"] {
-    --bg: #eef1f7; --surface: #ffffff; --surface-2: #f7f8fb;
-    --ink: #14161c; --ink-muted: #5b6270; --ink-faint: #8991a0;
-    --hairline: rgba(20,22,34,0.10); --hairline-strong: rgba(20,22,34,0.16);
-    --accent: #4a82f8; --accent-ink: #ffffff; --accent-wash: rgba(74,130,248,0.10);
-    --shadow-pop: 0 2px 4px rgba(16,18,30,0.06), 0 20px 44px rgba(16,18,30,0.14);
+    --bg: #111218; --surface: #1b1c24; --surface-2: #23242e;
+    --ink: #eeeff5; --ink-muted: #a2a4b4; --ink-faint: #6f7182;
+    --hairline: rgba(255,255,255,0.09); --hairline-strong: rgba(255,255,255,0.16);
+    --brand: #4a5bd4; --brand-text: #a4adff; --hl-soft: rgba(255,204,64,0.30);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 56px rgba(0,0,0,0.55);
   }
 
   * { box-sizing: border-box; }
@@ -64,596 +60,502 @@
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
 
-  /* ---------- real macOS menu bar mockup ---------- */
-  .menubar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px;
-    background: color-mix(in srgb, var(--surface) 78%, transparent);
-    backdrop-filter: var(--bar-blur);
-    -webkit-backdrop-filter: var(--bar-blur);
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
     border-bottom: 1px solid var(--hairline);
-    font-size: 12.5px;
-    color: var(--ink);
-    user-select: none;
   }
-  .menubar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
-  .menubar-apple { width: 12px; height: 12px; flex-shrink: 0; color: var(--ink); }
-  .menubar-appname { font-weight: 700; }
-  .menubar-menu { color: var(--ink-muted); }
-  .menubar-menu.site-link { cursor: pointer; text-decoration: none; color: var(--ink-muted); }
-  .menubar-menu.site-link:hover { color: var(--ink); }
-  @media (max-width: 640px) { .menubar-menu:not(.site-link) { display: none; } }
-  .menubar-right { display: flex; align-items: center; gap: 12px; color: var(--ink); }
-  .menubar-status-icon { width: 16px; height: 16px; opacity: 0.85; }
-  .menubar-battery { display: flex; align-items: center; gap: 3px; }
-  .menubar-battery svg { width: 22px; height: 11px; }
-  .menubar-icon-btn {
-    width: 22px; height: 22px;
-    border-radius: 5px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: background 0.12s ease;
-    border: none;
-    background: none;
-    padding: 0;
-    color: var(--ink);
-  }
-  .menubar-icon-btn:hover, .menubar-icon-btn[aria-pressed="true"] { background: var(--hairline-strong); }
-  .menubar-icon-btn img { width: 16px; height: 16px; display: block; }
+  nav .wrap { display: flex; align-items: center; height: 54px; gap: 22px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px; text-decoration: none; letter-spacing: -0.01em; }
+  .brand img { width: 26px; height: 26px; }
+  nav .links { margin-left: auto; display: flex; gap: 20px; align-items: center; font-size: 13.5px; }
+  nav .links a { text-decoration: none; color: var(--ink-muted); }
+  nav .links a:hover { color: var(--ink); }
+  .gh-link { display: inline-flex; align-items: center; gap: 6px; }
+  .gh-link svg { width: 16px; height: 16px; }
+  @media (max-width: 560px) { nav .links a.optional { display: none; } }
 
   /* ---------- hero ---------- */
-  .hero {
-    padding: 72px 0 40px;
-    text-align: center;
-    position: relative;
+  .hero { padding: 76px 0 36px; text-align: center; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--ink-muted);
+    padding: 5px 12px; border: 1px solid var(--hairline-strong); border-radius: 999px;
+    background: var(--surface);
   }
-  .eyebrow {
-    font-family: var(--mono);
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 18px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .eyebrow::before, .eyebrow::after {
-    content: "";
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    display: inline-block;
-  }
+  .kicker b { color: var(--brand-text); font-weight: 700; }
   h1 {
-    font-family: var(--mono);
-    font-size: clamp(30px, 5.2vw, 48px);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.15;
-    margin: 0 0 18px;
-    text-wrap: balance;
+    font-size: clamp(40px, 7.4vw, 76px);
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin: 22px 0 18px;
   }
-  h1 .dim { color: var(--ink-faint); }
-  .subtitle {
-    font-size: clamp(15px, 2vw, 17px);
-    color: var(--ink-muted);
-    max-width: 520px;
-    margin: 0 auto 36px;
-    line-height: 1.65;
-  }
-
-  .cta-row { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .btn-download {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--accent);
-    color: var(--accent-ink);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 15.5px;
-    padding: 13px 26px;
-    border-radius: 10px;
-    transition: transform 0.15s ease, filter 0.15s ease;
-  }
-  .btn-download:hover { filter: brightness(1.06); transform: translateY(-1px); }
-  .btn-download svg { width: 17px; height: 17px; }
-  .meta-line { font-family: var(--mono); color: var(--ink-faint); font-size: 12px; }
-
-  .gatekeeper-note {
-    margin-top: 4px;
-    max-width: 440px;
-    text-align: left;
-  }
-  .gatekeeper-note summary {
-    cursor: pointer;
-    font-size: 12.5px;
-    color: var(--ink-muted);
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    justify-content: center;
-  }
-  .gatekeeper-note summary::-webkit-details-marker { display: none; }
-  .gatekeeper-note summary::before {
-    content: "⚠";
-    color: var(--accent);
-    font-size: 11px;
-  }
-  .gatekeeper-note summary:hover { color: var(--ink); }
-  .gatekeeper-body {
-    margin-top: 10px;
-    padding: 12px 14px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: 10px;
-    font-size: 12.5px;
-    color: var(--ink-muted);
-    line-height: 1.6;
-  }
-  .gatekeeper-body p { margin: 0 0 8px; }
-  .gatekeeper-body ol { margin: 0; padding-left: 18px; }
-  .gatekeeper-body li + li { margin-top: 4px; }
-  .gatekeeper-body code {
-    font-family: var(--mono);
-    background: var(--surface-2);
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 11.5px;
-  }
-
-  /* ---------- popover demo ---------- */
-  .demo-anchor {
+  .marker {
     position: relative;
-    height: 0;
+    white-space: nowrap;
+    z-index: 0;
   }
-  .demo-stage {
-    padding: 16px 24px 0;
-    display: flex;
-    justify-content: center;
-  }
-  @media (min-width: 721px) {
-    .demo-anchor { height: auto; }
-    .demo-stage {
-      position: absolute;
-      top: 8px;
-      right: 24px;
-      left: auto;
-      padding: 0;
-      justify-content: flex-end;
-      width: auto;
-    }
-  }
-  .popover {
-    position: relative;
-    width: 320px;
-    max-width: calc(100vw - 48px);
-    height: fit-content;
-    background: var(--surface);
-    border-radius: 14px;
-    box-shadow: var(--shadow-pop);
-    border: 1px solid var(--hairline);
-    padding: 16px;
-    transform-origin: top right;
-    opacity: 0;
-    transform: translateY(-10px) scale(0.94);
-    transition: opacity 0.22s cubic-bezier(0.2, 0.9, 0.25, 1), transform 0.22s cubic-bezier(0.2, 0.9, 0.25, 1);
-    pointer-events: none;
-  }
-  .popover.visible {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    pointer-events: auto;
-  }
-  .popover::before {
+  .marker::before {
     content: "";
     position: absolute;
-    top: -7px;
-    right: 22px;
-    width: 14px; height: 14px;
-    background: var(--surface);
-    border-left: 1px solid var(--hairline);
-    border-top: 1px solid var(--hairline);
-    transform: rotate(45deg);
-    border-radius: 3px 0 0 0;
+    left: -0.08em; right: -0.08em;
+    bottom: 0.06em; height: 0.42em;
+    background: var(--hl);
+    border-radius: 0.08em;
+    z-index: -1;
+    transform-origin: left center;
+    animation: swipe 0.7s 0.25s cubic-bezier(0.2, 0.9, 0.25, 1) both;
   }
-  @media (max-width: 720px) {
-    .popover { transform-origin: top center; }
-    .popover::before { display: none; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .popover { transition: none; }
-    .type-target::after { animation: none !important; }
-  }
-  .pv-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-  .pv-logo { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
-  .pv-title { font-family: var(--mono); font-weight: 600; font-size: 13px; }
-  .pv-header-icons { margin-left: auto; display: flex; gap: 8px; color: var(--ink-faint); }
-  .pv-header-icons svg { width: 14px; height: 14px; }
-  .segmented {
-    display: flex;
-    background: var(--surface-2);
-    border-radius: 8px;
-    padding: 3px;
-    margin-bottom: 12px;
-    font-size: 12px;
-  }
-  .segmented button {
-    flex: 1; text-align: center; padding: 5px 0; border-radius: 6px; color: var(--ink-muted);
-    border: none; background: none; font: inherit; cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .segmented button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-weight: 600; }
-  .card-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-faint); margin: 10px 0 4px; }
-  .pv-box {
-    background: var(--surface-2);
-    border: 1px solid var(--hairline);
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 12.5px;
-    min-height: 42px;
+  @keyframes swipe { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .lead {
+    font-size: clamp(16px, 2.1vw, 19px);
     color: var(--ink-muted);
+    line-height: 1.65;
+    max-width: 600px;
+    margin: 0 auto 32px;
+  }
+  .cta { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-weight: 700; font-size: 15px; text-decoration: none;
+    padding: 13px 22px; border-radius: 12px;
+    transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
+  }
+  .btn svg { width: 17px; height: 17px; }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 6px 18px rgba(51,64,158,0.28); }
+  .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  .btn-ghost { border: 1px solid var(--hairline-strong); background: var(--surface); }
+  .btn-ghost:hover { transform: translateY(-1px); }
+  .meta { margin-top: 14px; font-size: 12.5px; color: var(--ink-faint); font-family: var(--mono); }
+
+  /* ---------- demo ---------- */
+  .demo { padding: 34px 0 30px; }
+  .window {
     position: relative;
+    max-width: 760px; margin: 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
   }
-  .pv-box.result { color: var(--ink); background: var(--accent-wash); border-color: color-mix(in srgb, var(--accent) 35%, transparent); padding-right: 30px; }
-  .pv-copy-btn {
-    position: absolute; top: 6px; right: 6px;
-    width: 20px; height: 20px;
-    border: none; border-radius: 5px; background: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--ink-faint);
-    transition: background 0.15s ease, color 0.15s ease;
+  .titlebar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--hairline); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--hairline-strong); }
+  .dot:nth-child(1) { background: #ff5f57; } .dot:nth-child(2) { background: #febc2e; } .dot:nth-child(3) { background: #28c840; }
+  .titlebar .t { margin: 0 auto; font-size: 12.5px; color: var(--ink-faint); transform: translateX(-26px); }
+  .doc { padding: 40px clamp(20px, 6vw, 64px) 120px; }
+  .doc h3 { font-family: var(--serif); font-size: 24px; margin: 0 0 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .doc p { font-family: var(--serif); font-size: 18.5px; line-height: 1.75; margin: 0 0 14px; color: var(--ink); }
+  .doc p::selection, .doc h3::selection, .doc span::selection { background: var(--hl-soft); }
+  .hint { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font-size: 12.5px; color: var(--ink-faint); }
+  .hint kbd { font-family: var(--sans); font-size: 11px; border: 1px solid var(--hairline-strong); border-radius: 4px; padding: 1px 5px; }
+
+  .actionbar {
+    position: absolute; z-index: 5;
+    display: flex; align-items: center; gap: 2px;
+    padding: 3px;
+    background: rgba(23, 26, 41, 0.94);
+    border: 0.5px solid rgba(255,255,255,0.14);
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity: 0; transform: translateY(4px) scale(0.96);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    pointer-events: none;
   }
-  .pv-copy-btn:hover { background: var(--hairline); color: var(--ink); }
-  .pv-copy-btn svg { width: 12px; height: 12px; }
-  .pv-copy-btn.copied { color: #2fae5c; }
-  .type-target::after {
-    content: "";
-    display: inline-block;
-    width: 1px; height: 12px;
-    background: var(--ink-muted);
-    margin-left: 2px;
-    vertical-align: -2px;
-    animation: caret 0.9s steps(1) infinite;
+  .actionbar.show { opacity: 1; transform: none; pointer-events: auto; }
+  .actionbar button {
+    border: 0; background: none; color: rgba(255,255,255,0.8); cursor: pointer;
+    height: 26px; min-width: 30px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+    font: inherit;
   }
-  @keyframes caret { 50% { opacity: 0; } }
-  .pv-divider { display: flex; align-items: center; gap: 6px; margin: 10px 0; }
-  .pv-divider .line { flex: 1; height: 1px; background: var(--hairline); }
-  .pv-divider button.pill {
-    font-family: var(--mono); font-size: 10px; border: 1px solid var(--hairline); border-radius: 6px;
-    padding: 3px 8px; color: var(--ink-muted); white-space: nowrap;
-    background: var(--surface); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
-    transition: border-color 0.15s ease, color 0.15s ease;
+  .actionbar button:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .actionbar button svg { width: 13px; height: 13px; }
+  .actionbar .tr {
+    background: var(--hl); color: var(--brand-deep); font-weight: 700; font-size: 12.5px;
+    padding: 0 11px 0 4px; gap: 6px;
   }
-  .pv-divider button.pill:hover { border-color: var(--accent); color: var(--accent); }
-  .pv-divider button.pill svg { width: 9px; height: 9px; }
-  .pv-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
-  .pv-btn {
-    background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 600;
-    padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit;
-    transition: filter 0.15s ease;
+  .actionbar .tr:hover { background: #ffd666; color: var(--brand-deep); }
+  .actionbar .tr i {
+    font-style: normal; font-weight: 800; font-size: 11px;
+    width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--brand-deep); color: var(--hl);
   }
-  .pv-btn:hover { filter: brightness(1.08); }
+
+  .card {
+    position: absolute; z-index: 6;
+    width: min(380px, calc(100% - 24px));
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    opacity: 0; transform: translateY(-4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+    pointer-events: none;
+  }
+  .card.show { opacity: 1; transform: none; pointer-events: auto; }
+  .card-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px 6px; font-size: 11.5px; color: var(--ink-muted); }
+  .card-head img { width: 16px; height: 16px; }
+  .card-head .eng { margin-left: auto; }
+  .card-body { padding: 4px 16px 14px; }
+  .headword { font-family: var(--serif); font-size: 26px; font-weight: 700; display: inline; background: linear-gradient(transparent 58%, var(--hl-soft) 58%, var(--hl-soft) 92%, transparent 92%); }
+  .phon { font-family: var(--mono); font-size: 12.5px; color: var(--ink-muted); margin: 6px 0 10px; }
+  .sense { display: flex; gap: 8px; align-items: baseline; font-size: 14.5px; margin: 6px 0; }
+  .pos { font-family: var(--serif); font-style: italic; font-weight: 700; font-size: 11px; color: var(--brand-text); background: color-mix(in srgb, var(--brand-text) 14%, transparent); padding: 1px 6px; border-radius: 4px; }
+  .ex { margin-top: 10px; padding-left: 10px; border-left: 2px solid var(--hairline-strong); font-size: 12.5px; color: var(--ink-muted); }
+  .ex em { font-family: var(--serif); color: var(--ink); display: block; }
+  .quote { border-left: 2.5px solid var(--hl); padding-left: 10px; color: var(--ink-muted); font-size: 12.5px; line-height: 1.55; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .trans { font-size: 15.5px; line-height: 1.65; }
+  .card-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 7px 10px; border-top: 1px solid var(--hairline); background: color-mix(in srgb, var(--ink) 3%, transparent); }
+  .card-foot .icon { width: 26px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-muted); }
+  .card-foot .icon svg { width: 13px; height: 13px; }
+  .card-foot .copy { background: var(--brand); color: #fff; border: 0; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 700; padding: 4px 12px; cursor: pointer; }
+  .cursor { display: inline-block; width: 7px; height: 15px; background: var(--brand-text); vertical-align: -2px; margin-left: 2px; animation: blink 0.8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
 
   /* ---------- features ---------- */
-  section.features { padding: 8px 0 64px; }
-  .section-head { margin-bottom: 28px; }
-  .section-head .eyebrow { display: inline-flex; }
-  .section-head h2 {
-    font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 600;
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--hairline);
-    border: 1px solid var(--hairline);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-  @media (max-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
-  .feature {
-    background: var(--surface);
-    padding: 24px 22px;
-  }
-  .feature .tag {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--accent);
-    letter-spacing: 0.05em;
-    margin-bottom: 10px;
-  }
-  .feature h3 { font-size: 15px; margin: 0 0 7px; font-weight: 700; }
-  .feature p { font-size: 13.5px; color: var(--ink-muted); line-height: 1.6; margin: 0; }
+  section { padding: 64px 0; }
+  .sec-head { max-width: 620px; margin-bottom: 30px; }
+  .sec-head .label { font-family: var(--mono); font-size: 12px; color: var(--brand-text); letter-spacing: 0.06em; }
+  .sec-head h2 { font-size: clamp(26px, 3.6vw, 36px); letter-spacing: -0.02em; margin: 8px 0 0; line-height: 1.2; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 540px) { .grid { grid-template-columns: 1fr; } }
+  .feature { background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 22px; }
+  .feature .ic { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--brand-text) 12%, transparent); color: var(--brand-text); margin-bottom: 14px; }
+  .feature .ic svg { width: 17px; height: 17px; }
+  .feature h3 { margin: 0 0 6px; font-size: 16px; }
+  .feature p { margin: 0; font-size: 14px; line-height: 1.65; color: var(--ink-muted); }
 
-  /* ---------- spec sheet ---------- */
-  section.specs { padding: 0 0 80px; }
-  .spec-sheet {
-    border: 1px solid var(--hairline);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-  .spec-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 14px 20px;
-    font-size: 13.5px;
-  }
-  .spec-row + .spec-row { border-top: 1px solid var(--hairline); }
-  .spec-row .k { color: var(--ink-muted); }
-  .spec-row .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .engines { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .engine { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px 16px; }
+  .engine b { display: block; font-size: 14.5px; }
+  .engine span { font-size: 12.5px; color: var(--ink-faint); }
 
-  footer {
-    border-top: 1px solid var(--hairline);
-    padding: 26px 0;
-    text-align: center;
-    color: var(--ink-faint);
-    font-family: var(--mono);
-    font-size: 12px;
+  .steps { counter-reset: s; display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .step { background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 20px 22px; }
+  .step::before { counter-increment: s; content: counter(s); display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--hl); color: var(--brand-deep); font-weight: 800; font-size: 13px; align-items: center; justify-content: center; margin-bottom: 12px; }
+  .step h3 { margin: 0 0 6px; font-size: 15.5px; }
+  .step p { margin: 0; font-size: 13.5px; color: var(--ink-muted); line-height: 1.6; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--hairline); padding: 2px 6px; border-radius: 5px; word-break: break-all; }
+
+  footer { border-top: 1px solid var(--hairline); padding: 28px 0 40px; font-size: 13px; color: var(--ink-faint); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marker::before { animation: none; }
+    .actionbar, .card { transition: none; }
+    .cursor { animation: none; }
   }
 </style>
 </head>
-<body id="top">
+<body>
 
-<div class="menubar">
-  <div class="menubar-left">
-    <svg class="menubar-apple" viewBox="0 0 14 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M11.4 8.5c0-2 1.6-2.9 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.7-.7-1.4 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.5 2.1 2.6 2 1-.1 1.4-.7 2.7-.7 1.2 0 1.6.7 2.7.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.3-.1 0-2.4-.9-2.4-3zM9.1 2.4C9.6 1.8 10 .9 9.9 0c-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.4 2.3-1.2z"/>
-    </svg>
-    <span class="menubar-appname site-link" onclick="location.hash='top'">bartrans</span>
-    <a class="menubar-menu site-link" href="#features">功能</a>
-    <a class="menubar-menu site-link" href="#download">下载</a>
-  </div>
-  <div class="menubar-right">
-    <svg class="menubar-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-      <path d="M2 8.5c5.5-5 14.5-5 20 0"/>
-      <path d="M5.5 12c3.6-3.2 9.4-3.2 13 0"/>
-      <path d="M9 15.5c1.7-1.4 4.3-1.4 6 0"/>
-      <circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/>
-    </svg>
-    <span class="menubar-battery">
-      <svg viewBox="0 0 24 12" aria-hidden="true">
-        <rect x="1" y="1" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
-        <rect x="21" y="4" width="1.6" height="4" rx="0.6" fill="currentColor"/>
-        <rect x="2.5" y="2.5" width="14" height="7" rx="1.3" fill="currentColor" opacity="0.85"/>
-      </svg>
-    </span>
-    <button class="menubar-icon-btn" id="statusIcon" aria-pressed="false" aria-label="打开 bartrans">
-      <img src="icon.png" alt="" width="16" height="16" />
-    </button>
-  </div>
-</div>
-
-<div class="demo-anchor">
-  <div class="demo-stage">
-    <div class="popover" id="popover">
-      <div class="pv-header">
-        <img class="pv-logo" src="icon.png" alt="bartrans" width="22" height="22" />
-        <div class="pv-title">bartrans</div>
-        <div class="pv-header-icons">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </div>
-      </div>
-      <div class="segmented" id="engineSeg">
-        <button class="active" data-engine="system" type="button">系统离线</button>
-        <button data-engine="llm" type="button">LLM</button>
-      </div>
-      <div class="card-label">输入</div>
-      <div class="pv-box type-target" id="typeInput"></div>
-      <div class="pv-divider">
-        <div class="line"></div>
-        <button class="pill" id="directionPill" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3v18M17 3l4 4M17 3l-4 4"/><path d="M7 21V3M7 21l-4-4M7 21l4-4"/></svg>
-          <span id="directionLabel">英 → 中</span>
-        </button>
-        <div class="line"></div>
-      </div>
-      <div class="card-label">翻译结果</div>
-      <div class="pv-box result" id="typeOutput">
-        <button class="pv-copy-btn" id="copyBtn" type="button" aria-label="复制">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        </button>
-        <span id="typeOutputText"></span>
-      </div>
-      <div class="pv-footer"><button class="pv-btn" id="translateBtn" type="button">翻译 ⏎</button></div>
-    </div>
-  </div>
-</div>
-
-<div class="wrap">
-  <header class="hero">
-    <div class="eyebrow">MACOS · 无第三方依赖</div>
-    <h1>挂在菜单栏里的<br/><span class="dim">翻译工具。</span></h1>
-    <p class="subtitle">
-      不做划词、不做截图 OCR、不常驻后台轮询。点一下图标，粘贴文字，出翻译结果——
-      100% Swift 原生实现。
-    </p>
-    <div class="cta-row" id="download">
-      <a class="btn-download" href="bartrans-macOS.dmg" download>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-        下载 bartrans
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="" />bartrans</a>
+    <div class="links">
+      <a class="optional" href="#features">功能</a>
+      <a class="optional" href="#install">安装</a>
+      <a class="gh-link" href="https://github.com/czllll/bartrans" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
       </a>
-      <div class="meta-line">macOS 15+ · 0.9 MB · 免费</div>
-      <details class="gatekeeper-note">
-        <summary>首次打开提示：Mac 可能会拦截，点这里看怎么办</summary>
-        <div class="gatekeeper-body">
-          <p>因为还没有 Apple 开发者签名公证，macOS 第一次打开时会提示"无法验证开发者"。打开方法（三选一）：</p>
-          <ol>
-            <li>「系统设置」→「隐私与安全性」，往下滚动找到 bartrans 那一行，点<strong>「仍要打开」</strong></li>
-            <li>在「访达」里右键点 App 图标 →「打开」，会弹出确认框，点「打开」</li>
-            <li>在终端执行 <code>xattr -d com.apple.quarantine /path/to/bartrans.app</code></li>
-          </ol>
-        </div>
-      </details>
     </div>
-  </header>
+  </div>
+</nav>
 
-  <section class="features" id="features">
-    <div class="section-head">
-      <div class="eyebrow">功能</div>
-      <h2>只做翻译这一件事</h2>
+<header class="hero wrap">
+  <span class="kicker"><b>2.0</b> 全局划词翻译 · 开源免费</span>
+  <h1><span class="marker">选中</span>即译。</h1>
+  <p class="lead">在任意 App 里选中一段文字，旁边就会出现翻译。像 PopClip 一样顺手，查词、翻译、替换原文一步到位——纯原生 Swift，不打断你的阅读。</p>
+  <div class="cta" id="download">
+    <a class="btn btn-primary" href="bartrans-macOS.dmg" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      下载 macOS 版
+    </a>
+    <a class="btn btn-ghost" href="https://github.com/czllll/bartrans" target="_blank" rel="noopener">在 GitHub 查看源码</a>
+  </div>
+  <div class="meta">v2.0.0 · macOS 15+ · Apple 芯片 / Intel · MIT 协议</div>
+</header>
+
+<div class="demo wrap">
+  <div class="window" id="win">
+    <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">任意 App</span></div>
+    <div class="doc" id="doc">
+      <h3>On Reading</h3>
+      <p id="p1">Good design is often a matter of <span id="seed">serendipity</span>: you notice a word, select it, and its meaning simply appears.</p>
+      <p id="p2">You never have to leave the page you were reading, switch windows, or break your concentration.</p>
+    </div>
+    <div class="hint">试试看：在上面的文字里拖选或双击一个词</div>
+
+    <div class="actionbar" id="bar" role="toolbar" aria-label="划词工具条">
+      <button class="tr" id="barTranslate" type="button"><i>译</i>翻译</button>
+      <button type="button" aria-label="复制" id="barCopy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      <button type="button" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+      <button type="button" aria-label="朗读"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button>
+    </div>
+
+    <div class="card" id="card" aria-live="polite">
+      <div class="card-head"><img src="icon.png" alt="" /><span id="dir">英文 → 简体中文</span><span class="eng">Apple 离线</span></div>
+      <div class="card-body" id="cardBody"></div>
+      <div class="card-foot">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></span>
+        <button class="copy" id="cardCopy" type="button">复制</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="label">FEATURES</div>
+      <h2>从选中到读懂，不离开当前页面</h2>
     </div>
     <div class="grid">
       <div class="feature">
-        <div class="tag">轻量</div>
-        <h3>极致轻量</h3>
-        <p>安装包不到 1 MB，空闲内存占用 &lt; 50MB，没有常驻后台轮询。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h13"/><path d="M18 10v8"/></svg></div>
+        <h3>全局划词</h3>
+        <p>拖选、双击、三击都能触发，选区上方弹出工具条：翻译、复制、搜索、朗读。也可以设为选中直接翻译，或按 ⌥D。</p>
       </div>
       <div class="feature">
-        <div class="tag">原生</div>
-        <h3>100% 原生</h3>
-        <p>纯 Swift + SwiftUI/AppKit 实现，没有 Electron，没有 Web 技术栈。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7M8 11h5"/></svg></div>
+        <h3>查词模式</h3>
+        <p>选中单词时给出音标、词性、释义和例句，并附上 macOS「词典」App 的离线释义。</p>
       </div>
       <div class="feature">
-        <div class="tag">引擎</div>
-        <h3>双引擎翻译</h3>
-        <p>系统离线翻译（Translation framework）+ LLM，LLM 支持 Anthropic 和任意 OpenAI 兼容接口。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h12M4 14h9"/><path d="M4 18h4"/></svg></div>
+        <h3>流式输出</h3>
+        <p>LLM 译文逐字出现，不用干等。浮窗只朝远离选区的方向展开，不会挡住你划的词。</p>
       </div>
       <div class="feature">
-        <div class="tag">隐私</div>
-        <h3>隐私优先</h3>
-        <p>API Key 只存 macOS Keychain，翻译文本不做任何上报或埋点。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4-4 4"/><path d="M21 7H9"/><path d="M7 21l-4-4 4-4"/><path d="M3 17h12"/></svg></div>
+        <h3>替换原文</h3>
+        <p>写英文邮件时，先打中文，选中后一键把译文替换回去。</p>
       </div>
       <div class="feature">
-        <div class="tag">历史</div>
-        <h3>历史记录</h3>
-        <p>最近的翻译随手可查，同一个面板里翻转查看，不会叠加出一堆窗口。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/></svg></div>
+        <h3>菜单栏面板</h3>
+        <p>点一下菜单栏图标，手动输入或粘贴翻译；历史记录和设置就在面板背面。</p>
       </div>
       <div class="feature">
-        <div class="tag">启动</div>
-        <h3>登录时启动</h3>
-        <p>设置一次，开机即用；用 SMAppService 实现，不依赖已废弃的旧 API。</p>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>隐私与原生</h3>
+        <p>纯 Swift，无第三方依赖，无统计上报。API Key 存钥匙串；用 Apple 离线引擎时文字不出本机。</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="specs">
-    <div class="section-head">
-      <div class="eyebrow">规格</div>
-      <h2>系统要求</h2>
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="label">ENGINES</div>
+      <h2>离线免费，或者接入你喜欢的模型</h2>
     </div>
-    <div class="spec-sheet">
-      <div class="spec-row"><span class="k">系统版本</span><span class="v">macOS 15 Sequoia+</span></div>
-      <div class="spec-row"><span class="k">第三方依赖</span><span class="v">无</span></div>
-      <div class="spec-row"><span class="k">安装包体积</span><span class="v">0.9 MB</span></div>
-      <div class="spec-row"><span class="k">空闲内存占用</span><span class="v">&lt; 50 MB</span></div>
-      <div class="spec-row"><span class="k">价格</span><span class="v">免费</span></div>
+    <div class="engines">
+      <div class="engine"><b>Apple 离线翻译</b><span>免费 · 无需联网</span></div>
+      <div class="engine"><b>Anthropic</b><span>Claude 系列</span></div>
+      <div class="engine"><b>OpenAI</b><span>官方接口</span></div>
+      <div class="engine"><b>DeepSeek</b><span>OpenAI 兼容</span></div>
+      <div class="engine"><b>OpenRouter</b><span>数百个模型</span></div>
+      <div class="engine"><b>Ollama / LM Studio</b><span>本地模型</span></div>
     </div>
-  </section>
-</div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="label">INSTALL</div>
+      <h2>三步开始使用</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3>下载并拖进「应用程序」</h3>
+        <p><a href="bartrans-macOS.dmg" download>下载 DMG</a>，或到 <a href="https://github.com/czllll/bartrans/releases" target="_blank" rel="noopener">GitHub Releases</a> 获取。</p>
+      </div>
+      <div class="step">
+        <h3>首次打开</h3>
+        <p>应用未经 Apple 公证，若提示无法验证开发者，在终端执行：<br /><code>xattr -dr com.apple.quarantine /Applications/bartrans.app</code></p>
+      </div>
+      <div class="step">
+        <h3>开启辅助功能权限</h3>
+        <p>「系统设置 → 隐私与安全性 → 辅助功能」中打开 bartrans，就能在任意 App 里划词了。</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <footer>
-  bartrans · 个人自用工具，无遥测、无追踪
+  <div class="wrap">
+    <span>bartrans · MIT License · 无遥测、无追踪</span>
+    <a href="https://github.com/czllll/bartrans" target="_blank" rel="noopener">github.com/czllll/bartrans</a>
+  </div>
 </footer>
 
 <script>
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+(function () {
+  var win = document.getElementById("win");
+  var doc = document.getElementById("doc");
+  var bar = document.getElementById("bar");
+  var card = document.getElementById("card");
+  var cardBody = document.getElementById("cardBody");
+  var dirEl = document.getElementById("dir");
+  var current = "";
+  var currentRect = null;
+  var typingTimer = null;
 
-  function typeInto(el, text, delay, done) {
-    if (reduceMotion) { el.textContent = text; el.classList.remove("type-target"); if (done) done(); return; }
-    el.classList.add("type-target");
-    var i = 0;
-    function step() {
-      el.textContent = text.slice(0, i);
-      i++;
-      if (i <= text.length) {
-        setTimeout(step, 26);
-      } else {
-        el.classList.remove("type-target");
-        if (done) done();
-      }
-    }
-    setTimeout(step, delay);
-  }
-
-  var examples = {
-    "en-zh": { label: "英 → 中", input: "Hello, how are you doing today?", output: "你好，你今天怎么样？" },
-    "zh-en": { label: "中 → 英", input: "今天天气真不错，我们出去走走吧。", output: "The weather is great today, let's go for a walk." }
+  var dict = {
+    serendipity: { phon: "/ˌserənˈdɪpəti/", senses: [["n.", "机缘凑巧；意外发现珍奇事物的本领"], ["n.", "意外之喜"]], ex: ["It was pure serendipity.", "这纯属机缘巧合。"] },
+    design: { phon: "/dɪˈzaɪn/", senses: [["n.", "设计；图案"], ["v.", "设计；构思"]], ex: ["Good design is invisible.", "好的设计是无形的。"] },
+    notice: { phon: "/ˈnəʊtɪs/", senses: [["v.", "注意到；察觉"], ["n.", "通知；布告"]], ex: ["Did you notice the change?", "你注意到这个变化了吗？"] },
+    meaning: { phon: "/ˈmiːnɪŋ/", senses: [["n.", "意思；含义"], ["n.", "意义；重要性"]], ex: ["What is the meaning of this word?", "这个词是什么意思？"] },
+    concentration: { phon: "/ˌkɒnsnˈtreɪʃn/", senses: [["n.", "专心；专注"], ["n.", "浓度"]], ex: ["Noise breaks my concentration.", "噪音让我无法专心。"] },
+    select: { phon: "/sɪˈlekt/", senses: [["v.", "选择；挑选"], ["adj.", "精选的"]], ex: ["Select a word to translate it.", "选中一个词来翻译它。"] },
+    reading: { phon: "/ˈriːdɪŋ/", senses: [["n.", "阅读；读物"]], ex: ["She loves reading.", "她热爱阅读。"] },
+    word: { phon: "/wɜːd/", senses: [["n.", "单词；话语"]], ex: ["Look up a word.", "查一个词。"] },
+    page: { phon: "/peɪdʒ/", senses: [["n.", "页；页面"]], ex: ["Turn the page.", "翻到下一页。"] },
+    appears: { phon: "/əˈpɪəz/", senses: [["v.", "出现；显得（appear 的第三人称单数）"]], ex: ["A menu appears.", "出现一个菜单。"] }
   };
-  var direction = "en-zh";
+  var sentences = [
+    ["Good design is often a matter of serendipity: you notice a word, select it, and its meaning simply appears.",
+     "好的设计往往是一种机缘巧合：你注意到一个词，选中它，它的意思就自然出现了。"],
+    ["You never have to leave the page you were reading, switch windows, or break your concentration.",
+     "你无需离开正在阅读的页面、切换窗口，也不会打断你的专注。"],
+    ["On Reading", "论阅读"]
+  ];
 
-  var popover = document.getElementById("popover");
-  var statusIcon = document.getElementById("statusIcon");
-  var inputEl = document.getElementById("typeInput");
-  var outputTextEl = document.getElementById("typeOutputText");
-  var directionLabel = document.getElementById("directionLabel");
-  var directionPill = document.getElementById("directionPill");
-  var translateBtn = document.getElementById("translateBtn");
-  var copyBtn = document.getElementById("copyBtn");
-  var engineButtons = document.querySelectorAll("#engineSeg button");
+  function norm(s) { return s.replace(/\s+/g, " ").trim(); }
 
-  function runDemo() {
-    var ex = examples[direction];
-    inputEl.textContent = "";
-    outputTextEl.textContent = "";
-    typeInto(inputEl, ex.input, 300, function () {
-      typeInto(outputTextEl, ex.output, 250);
-    });
-  }
-
-  function openPopover() {
-    popover.classList.add("visible");
-    statusIcon.setAttribute("aria-pressed", "true");
-    runDemo();
-  }
-  function closePopover() {
-    popover.classList.remove("visible");
-    statusIcon.setAttribute("aria-pressed", "false");
-  }
-
-  statusIcon.addEventListener("click", function () {
-    if (popover.classList.contains("visible")) closePopover();
-    else openPopover();
-  });
-
-  directionPill.addEventListener("click", function () {
-    direction = direction === "en-zh" ? "zh-en" : "en-zh";
-    directionLabel.textContent = examples[direction].label;
-    runDemo();
-  });
-
-  translateBtn.addEventListener("click", runDemo);
-
-  engineButtons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      engineButtons.forEach(function (b) { b.classList.remove("active"); });
-      btn.classList.add("active");
-    });
-  });
-
-  copyBtn.addEventListener("click", function () {
-    var text = outputTextEl.textContent;
-    if (text && navigator.clipboard) {
-      navigator.clipboard.writeText(text).catch(function () {});
+  function translateText(text) {
+    var t = norm(text);
+    var key = t.toLowerCase().replace(/[^a-z]/g, "");
+    if (/^[A-Za-z'-]+$/.test(t) && dict[key]) return { word: t, entry: dict[key] };
+    var full = [];
+    for (var i = 0; i < sentences.length; i++) {
+      if (t.indexOf(sentences[i][0]) !== -1) full.push(sentences[i][1]);
     }
-    copyBtn.classList.add("copied");
-    copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-    setTimeout(function () {
-      copyBtn.classList.remove("copied");
-      copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    }, 1300);
+    if (full.length) return { text: full.join("") };
+    for (var j = 0; j < sentences.length; j++) {
+      if (sentences[j][0].indexOf(t) !== -1) return { text: "……" + sentences[j][1] + "（演示：整句译文）" };
+    }
+    return { text: "（演示页面仅内置了部分译文。在 App 中会调用 Apple 离线翻译或你配置的 LLM。）" };
+  }
+
+  function rectIn(r) {
+    var w = win.getBoundingClientRect();
+    return { left: r.left - w.left, right: r.right - w.left, top: r.top - w.top, bottom: r.bottom - w.top, width: r.width };
+  }
+
+  function hideAll() {
+    bar.classList.remove("show");
+    card.classList.remove("show");
+    clearTimeout(typingTimer);
+  }
+
+  function showBar(rect) {
+    var x = rect.left + rect.width / 2 - bar.offsetWidth / 2;
+    x = Math.max(8, Math.min(x, win.clientWidth - bar.offsetWidth - 8));
+    bar.style.left = x + "px";
+    bar.style.top = (rect.top - bar.offsetHeight - 8) + "px";
+    card.classList.remove("show");
+    bar.classList.add("show");
+  }
+
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+
+  function showCard() {
+    if (!current || !currentRect) return;
+    bar.classList.remove("show");
+    var res = translateText(current);
+    var html;
+    if (res.entry) {
+      dirEl.textContent = "英文 → 简体中文";
+      html = '<div class="headword">' + esc(res.word) + '</div><div class="phon">' + res.entry.phon + "</div>";
+      res.entry.senses.forEach(function (s) { html += '<div class="sense"><span class="pos">' + s[0] + "</span><span>" + s[1] + "</span></div>"; });
+      html += '<div class="ex"><em>' + res.entry.ex[0] + "</em>" + res.entry.ex[1] + "</div>";
+      cardBody.innerHTML = html;
+    } else {
+      dirEl.textContent = "英文 → 简体中文";
+      cardBody.innerHTML = '<div class="quote">' + esc(norm(current)) + '</div><div class="trans" id="tt"></div>';
+      streamInto(document.getElementById("tt"), res.text);
+    }
+    var x = currentRect.left + currentRect.width / 2 - card.offsetWidth / 2;
+    x = Math.max(12, Math.min(x, win.clientWidth - card.offsetWidth - 12));
+    card.style.left = x + "px";
+    card.style.top = (currentRect.bottom + 10) + "px";
+    card.classList.add("show");
+  }
+
+  function streamInto(el, text) {
+    var i = 0;
+    clearTimeout(typingTimer);
+    (function step() {
+      el.innerHTML = esc(text.slice(0, i)) + (i < text.length ? '<span class="cursor"></span>' : "");
+      if (i++ < text.length) typingTimer = setTimeout(step, 28);
+    })();
+  }
+
+  function handleSelection(direct) {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+    if (!doc.contains(range.commonAncestorContainer)) return;
+    var text = sel.toString();
+    if (!norm(text)) return;
+    current = text;
+    var rects = range.getClientRects();
+    var first = rects[0], last = rects[rects.length - 1];
+    var r = range.getBoundingClientRect();
+    currentRect = rectIn({ left: r.left, right: r.right, top: first.top, bottom: last.bottom, width: r.width });
+    if (direct) showCard(); else showBar(currentRect);
+  }
+
+  doc.addEventListener("mousedown", hideAll);
+  doc.addEventListener("mouseup", function () { setTimeout(function () { handleSelection(false); }, 10); });
+  doc.addEventListener("touchend", function () { setTimeout(function () { handleSelection(false); }, 300); });
+  document.addEventListener("mousedown", function (e) {
+    if (!win.contains(e.target)) hideAll();
+  });
+  document.getElementById("barTranslate").addEventListener("click", showCard);
+  document.getElementById("barCopy").addEventListener("click", function () {
+    if (navigator.clipboard) navigator.clipboard.writeText(norm(current)).catch(function () {});
+    bar.classList.remove("show");
+  });
+  document.getElementById("cardCopy").addEventListener("click", function () {
+    var btn = this;
+    if (navigator.clipboard) navigator.clipboard.writeText(cardBody.innerText).catch(function () {});
+    btn.textContent = "已复制";
+    setTimeout(function () { btn.textContent = "复制"; }, 1200);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hideAll();
+    if (e.altKey && e.code === "KeyD") { e.preventDefault(); handleSelection(true); }
   });
 
-  // 首次进入页面自动"点一下"演示一次
-  setTimeout(openPopover, 500);
+  // 首次进入：自动演示一次"选中 serendipity → 工具条 → 翻译"
+  function autoDemo() {
+    var seed = document.getElementById("seed");
+    var range = document.createRange();
+    range.selectNodeContents(seed);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    handleSelection(false);
+    setTimeout(function () { if (bar.classList.contains("show")) showCard(); }, 1100);
+  }
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.addEventListener("load", function () { setTimeout(autoDemo, reduce ? 0 : 900); });
+})();
 </script>
-
 </body>
 </html>

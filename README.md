@@ -1,51 +1,94 @@
-# bartrans
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="bartrans icon">
+</p>
 
-macOS 全局划词翻译 / 查词工具，交互类似 PopClip：在任意 App 里选中文字，选区旁边弹出一个小工具条，点「翻译」就地显示结果。纯 Swift + SwiftUI/AppKit，无第三方依赖。
+<h1 align="center">bartrans</h1>
 
-## 构建 & 运行
+<p align="center">
+  macOS 全局划词翻译 / 查词工具 —— 像 PopClip 一样，选中即译。<br>
+  纯 Swift + SwiftUI / AppKit，零第三方依赖。
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
+  <img src="https://img.shields.io/badge/macOS-15%2B-black.svg" alt="macOS 15+">
+  <img src="https://img.shields.io/badge/Swift-6-orange.svg" alt="Swift">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/action-bar.png" height="60" alt="划词工具条"><br>
+  <img src="docs/screenshots/lookup.png" width="420" alt="查词">
+  <img src="docs/screenshots/translate-dark.png" width="420" alt="段落翻译（深色）">
+</p>
+
+## 功能
+
+**划词**
+- 在任意 App 里拖选、双击、三击或 Shift+点击选中文字，选区上方弹出工具条：`翻译 / 复制 / 搜索 / 朗读`
+- 也可以设为「直接翻译」：选中后直接弹出结果；或者只用快捷键（默认 `⌥D`）
+- 浮窗总是放在选区旁边空间更大的一侧，只朝远离选区的方向伸展，不会挡住划的词
+- 读取选中文字优先用辅助功能 API（零副作用）；Chrome、VS Code 等读不到时，模拟 ⌘C 读取并立即还原剪贴板
+- 密码框不触发；可以按 App 停用
+
+**翻译与查词**
+- 单词 / 短语自动进入查词模式：音标、词性、释义、例句，附带 macOS「词典」App 的离线释义
+- 译文流式逐字输出；可朗读、复制，或一键用译文**替换**原文（写邮件时中译英很方便）
+- 引擎：Apple 离线翻译（免费、离线），或 LLM —— Anthropic、任意 OpenAI 兼容接口（OpenAI / DeepSeek / OpenRouter / Ollama / LM Studio…）
+- 引擎菜单里直接切换服务与模型；设置里有连接测试，显示首字延迟与总耗时
+- 母语 / 常用外语可配置，自动判断翻译方向；支持中（简 / 繁）英日韩法德西俄
+
+**菜单栏面板**
+- 点击菜单栏图标：手动输入或粘贴翻译，自动填入剪贴板内容
+- 历史记录（可搜索）和设置在面板的背面，翻转切换
+
+<p align="center">
+  <img src="docs/screenshots/panel.png" width="340" alt="菜单栏面板">
+  <img src="docs/screenshots/settings.png" width="340" alt="设置">
+</p>
+
+## 安装
+
+### 下载
+
+在 [Releases](https://github.com/czllll/bartrans/releases) 下载 `bartrans-macOS.dmg`，把 bartrans 拖进「应用程序」。
+
+应用没有经过 Apple 公证，首次打开如果提示"无法验证开发者"，在终端执行：
 
 ```bash
-./build_app.sh
+xattr -dr com.apple.quarantine /Applications/bartrans.app
+```
+
+### 从源码构建
+
+需要 Xcode 16+（Swift 6 工具链）和 macOS 15+。
+
+```bash
+git clone https://github.com/czllll/bartrans.git
+cd bartrans
+./build_app.sh            # 生成 .build/release/bartrans.app（arm64 + x86_64）
 open .build/release/bartrans.app
 ```
 
-启动后只出现在菜单栏（无 Dock 图标）。第一次启动会请求「辅助功能」权限，划词功能依赖它。
+`build_app.sh` 会优先用钥匙串里的 Apple Development / Developer ID 证书签名（也可以用 `SIGN_IDENTITY` 指定），找不到才用 ad-hoc 签名。
+系统是按签名记住辅助功能授权的：ad-hoc 签名每次构建都会变，每次重新构建后都要重新授权。
 
-`build_app.sh` 会优先使用钥匙串里的 Apple Development / Developer ID 证书签名（可用 `SIGN_IDENTITY` 环境变量指定），没有证书才退回 ad-hoc。**这一点很重要**：系统按代码签名记住辅助功能授权，ad-hoc 签名每次构建都会变，每次重新构建都得重新授权。
+其它脚本：`./build_dmg.sh` 打包 DMG，`scripts/make_icon.sh` 从矢量源重新生成 App 图标。
 
-## 功能一览
+### 首次使用
 
-### 划词（2.0 新增）
+1. 启动后只出现在菜单栏（没有 Dock 图标）
+2. 按提示在「系统设置 → 隐私与安全性 → 辅助功能」中打开 bartrans —— 划词依赖这项权限
+3. 用 LLM 引擎的话，在设置 → 翻译里填好 API Key（保存在钥匙串中），点「测试当前模型」确认可用
 
-- **选中即弹出**：拖选、双击选词、三击选段、Shift+点击扩展选区都会触发，工具条浮在选区上方：`翻译 / 复制 / 搜索 / 朗读`
-- **两种弹出方式**：「显示工具条」（PopClip 式）或「直接翻译」（选中后直接弹出结果）
-- **快捷键**：默认 `⌥D` 翻译当前选中的文字；没有选中文字时打开菜单栏面板手动输入
-- **结果浮窗**：
-  - 译文流式逐字显示（LLM），面板向下展开，不遮挡选区
-  - 单词 / 短语自动进入**查词模式**：大号原词 + 发音；LLM 会给出音标、词性、释义、例句；同时附上 macOS「词典」App 的离线释义，可一键在词典中打开
-  - 可切换方向、引擎，自动重新翻译；可固定（点别处不关闭），可拖动
-  - `朗读` / `复制` / `替换`（用译文替换原文，适合写邮件时中译英）
-  - 点击浮窗外任意位置或按 `Esc` 关闭
-- **读取选中文字**：优先用辅助功能 API（零副作用）；Chrome、VS Code 等读不到时退回「模拟 ⌘C → 读剪贴板 → 恢复剪贴板」（可在设置里关闭）。密码框（安全输入状态）不会触发
-- **按 App 停用**：右键菜单栏图标 →「在『某 App』中停用划词」
+## 使用技巧
 
-### 菜单栏面板
-
-- 点击菜单栏图标弹出翻译面板，自动填入剪贴板文本（只在剪贴板变化后才覆盖，不会冲掉正在编辑的内容）
-- 回车翻译，Shift+回车换行；「历史」翻转到历史记录
-
-### 翻译引擎
-
-- 「系统离线」：Apple `Translation` 框架，免费、离线
-- 「LLM」：**Anthropic**（模型名可配置）或任意 **OpenAI 兼容** 接口（OpenAI / DeepSeek / Ollama / LM Studio 等，本地地址可不填 Key）；SSE 流式输出，Key 存 Keychain
-- 语言：设置「母语」和「常用外语」，自动识别时外文 → 母语、母语 → 外语；支持中（简/繁）英日韩法德西俄
-
-## 与 1.x 的差异
-
-- **关闭了 App Sandbox**：沙盒内无法读取其它 App 的选中文字、无法模拟按键。首次启动会把旧沙盒容器里的设置和历史记录迁移过来
-- 签名方式变化后，第一次用 LLM 引擎时系统会询问是否允许访问钥匙串里的 API Key，选「始终允许」即可
-- 修复：系统翻译连续两次翻译同一语言方向时第二次会卡住（`TranslationSession.Configuration` 需要 `invalidate()` 才会重跑）
-- 修复：快速连续翻译时结果互相覆盖（现在会取消上一次请求）
+| 操作 | 方式 |
+| --- | --- |
+| 翻译选中文字 | 选中后点工具条「翻译」，或按 `⌥D` |
+| 复制译文 | 浮窗里 `⇧⌘C` |
+| 关闭浮窗 | `Esc` 或点击别处；📌 固定后点别处不关闭 |
+| 在某个 App 里停用划词 | 在该 App 前台时右键菜单栏图标 |
+| 切换模型 | 浮窗 / 面板里的引擎菜单；备选模型在设置里用逗号分隔填写 |
 
 ## 代码结构
 
@@ -54,7 +97,23 @@ Sources/bartrans/
 ├── App/            入口、菜单栏图标 / 面板 / 右键菜单
 ├── Selection/      划词：全局鼠标监听、读取选中文字、辅助功能权限、全局快捷键
 ├── Popup/          划词工具条、结果浮窗、浮动面板、调度（SelectionController）
-├── Engines/        引擎协议、系统翻译、LLM（流式）、语言识别、词典 / 朗读
-├── Storage/        设置、历史、Keychain
-└── Views/          菜单栏面板、设置、历史
+├── Engines/        引擎协议、Apple 翻译、LLM（SSE 流式）、语言识别、词典 / 朗读
+├── Storage/        设置、历史、钥匙串
+└── Views/          菜单栏面板、设置、历史、图标与共用组件
 ```
+
+几个实现细节：
+
+- **Apple 翻译**：`Translation` 框架只能通过挂在视图上的 `.translationTask` 调用，每个界面各挂一个隐藏的桥接视图，把它包装成普通的 async 函数（`Engines/SystemEngine.swift`）
+- **不抢焦点的浮窗**：`NSPanel` + `.nonactivatingPanel`，弹出时用户原来的 App 保持激活（`Popup/FloatingPanel.swift`）
+- **没有沙盒**：读取其它 App 的选中文字、模拟按键都无法在 App Sandbox 内完成
+
+## 隐私
+
+- 不收集任何数据，没有统计和上报
+- 使用 Apple 离线引擎时，文字不会离开本机；使用 LLM 引擎时，文字只发送给你配置的服务
+- API Key 保存在 macOS 钥匙串中
+
+## License
+
+[MIT](LICENSE)

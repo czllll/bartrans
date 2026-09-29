@@ -39,7 +39,7 @@ private enum LLMHTTP {
                     guard (200...299).contains(http.statusCode) else {
                         var data = Data()
                         for try await byte in bytes { data.append(byte) }
-                        throw TranslationError.network(errorMessage(from: data) ?? "HTTP \(http.statusCode)")
+                        throw TranslationError.network(describe(status: http.statusCode, body: errorMessage(from: data), url: request.url))
                     }
 
                     for try await line in bytes.lines {
@@ -63,6 +63,22 @@ private enum LLMHTTP {
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// 把 HTTP 错误翻译成能指导用户修改设置的说明。
+    private static func describe(status: Int, body: String?, url: URL?) -> String {
+        let detail = body.map { "（\($0)）" } ?? ""
+        switch status {
+        case 401, 403:
+            return "API Key 无效或没有权限 · HTTP \(status)\(detail)"
+        case 404:
+            let address = url?.absoluteString ?? ""
+            return "接口地址或模型不存在 · HTTP 404\(detail)。请求地址：\(address)。Base URL 一般填到 /v1 为止"
+        case 429:
+            return "请求太频繁或额度不足 · HTTP 429\(detail)"
+        default:
+            return "HTTP \(status)\(detail)"
         }
     }
 
@@ -225,8 +241,7 @@ final class OpenAICompatibleEngine: TranslationEngine {
         let apiKey = apiKeyOverride ?? keychain.load(for: .openAICompatibleAPIKey) ?? ""
         guard !apiKey.isEmpty || isLocal else { return failing(TranslationError.apiKeyMissing) }
 
-        let endpointString = trimmedBase.hasSuffix("/") ? trimmedBase + "chat/completions" : trimmedBase + "/chat/completions"
-        guard !trimmedBase.isEmpty, let endpoint = URL(string: endpointString) else {
+        guard !trimmedBase.isEmpty, let endpoint = Self.endpoint(from: trimmedBase) else {
             return failing(TranslationError.network("LLM Base URL 无效"))
         }
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,6 +273,23 @@ final class OpenAICompatibleEngine: TranslationEngine {
         } catch {
             return failing(TranslationError.invalidResponse)
         }
+    }
+}
+
+extension OpenAICompatibleEngine {
+    /// 用户填的 Base URL 可能是 ".../v1"、".../v1/"，也可能已经带了 "/chat/completions"，都要兼容。
+    static func endpoint(from baseURL: String) -> URL? {
+        var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        guard !base.isEmpty else { return nil }
+        if !base.contains("://") {
+            base = "https://" + base
+        }
+        if !base.hasSuffix("/chat/completions") {
+            base += "/chat/completions"
+        }
+        guard let url = URL(string: base), url.scheme == "http" || url.scheme == "https" else { return nil }
+        return url
     }
 }
 

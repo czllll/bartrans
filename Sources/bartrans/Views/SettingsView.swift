@@ -212,7 +212,7 @@ private struct TranslationSettings: View {
             } footer: {
                 Text(settings.llmProvider == .anthropic
                      ? "备选模型会出现在翻译面板的引擎菜单里，一键切换。划词追求速度可以用 claude-haiku-4-5。API Key 保存在钥匙串中。"
-                     : "兼容 OpenAI、DeepSeek、Ollama、LM Studio 等；本地地址可不填 Key。备选模型会出现在翻译面板的引擎菜单里，一键切换。")
+                     : "兼容 OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等；Base URL 填到 /v1 为止；OpenRouter 的模型要带厂商前缀，如 deepseek/deepseek-v4.1-flash。本地地址可不填 Key。备选模型会出现在翻译面板的引擎菜单里，一键切换。")
                     .settingsFootnote()
             }
 

@@ -9,6 +9,8 @@ extension Notification.Name {
 /// SwiftUI 的 TextEditor 无法区分这两种按键，因此用 NSTextView 包一层。
 struct SubmitTextView: NSViewRepresentable {
     @Binding var text: String
+    var fontSize: CGFloat = 13
+    var inset = NSSize(width: 6, height: 6)
     var onSubmit: () -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -26,8 +28,14 @@ struct SubmitTextView: NSViewRepresentable {
 
         textView.delegate = context.coordinator
         textView.isRichText = false
-        textView.font = .systemFont(ofSize: 13)
-        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.font = .systemFont(ofSize: fontSize)
+        textView.textContainerInset = inset
+        textView.textContainer?.lineFragmentPadding = 0
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 3
+        textView.defaultParagraphStyle = paragraph
+        textView.typingAttributes[.paragraphStyle] = paragraph
+        textView.typingAttributes[.font] = NSFont.systemFont(ofSize: fontSize)
         textView.isEditable = true
         textView.isSelectable = true
         textView.drawsBackground = false

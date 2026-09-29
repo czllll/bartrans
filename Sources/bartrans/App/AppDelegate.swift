@@ -6,7 +6,6 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
-    private var settingsWindow: NSWindow?
     private var eventMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -45,9 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = TranslatePanelView.size
-        let panel = TranslatePanelView(viewModel: viewModel) { [weak self] in
-            self?.openSettings()
-        }
+        let panel = TranslatePanelView(viewModel: viewModel, permission: permission)
         popover.contentViewController = NSHostingController(
             rootView: panel.background(panelSystemEngine.hostView)
         )
@@ -196,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover?.isShown == true {
             closePopover()
         } else {
+            PanelNavigation.shared.show(.translate, animated: false)
             showPopover()
         }
     }
@@ -231,23 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Settings
 
+    /// 设置是菜单栏面板的背面：直接翻到设置那一面再弹出面板。
     private func openSettings() {
-        closePopover()
-        if let settingsWindow {
-            settingsWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate()
-            return
+        if popover?.isShown == true {
+            PanelNavigation.shared.show(.settings)
+        } else {
+            PanelNavigation.shared.show(.settings, animated: false)
+            showPopover()
         }
-
-        let hosting = NSHostingController(rootView: SettingsView(settings: settings, permission: permission))
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "bartrans 设置"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.center()
-        self.settingsWindow = window
-
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate()
     }
 }

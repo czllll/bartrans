@@ -21,7 +21,7 @@ struct HistoryView: View {
                 IconButton(systemName: "chevron.left", help: "返回") { onClose() }
                     .keyboardShortcut(.cancelAction)
                 Text("历史记录")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                 Spacer()
                 Button("清空") { historyStore.clear() }
                     .buttonStyle(.plain)
@@ -29,9 +29,9 @@ struct HistoryView: View {
                     .foregroundStyle(historyStore.entries.isEmpty ? Color.secondary.opacity(0.4) : Color.red.opacity(0.85))
                     .disabled(historyStore.entries.isEmpty)
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .frame(height: 42)
 
             if !historyStore.entries.isEmpty {
                 HStack(spacing: 6) {

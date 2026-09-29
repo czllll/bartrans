@@ -3,46 +3,49 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var permission: AccessibilityPermission
+    /// 返回翻译面板（设置是菜单栏面板的背面）
+    var onBack: () -> Void
 
     @ObservedObject private var navigation = SettingsNavigation.shared
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            TabView(selection: $navigation.tab) {
-                SelectionSettings(settings: settings, permission: permission)
-                    .tabItem { Label("划词", systemImage: "text.cursor") }
-                    .tag(SettingsNavigation.Tab.selection)
-                TranslationSettings(settings: settings)
-                    .tabItem { Label("翻译", systemImage: "character.bubble") }
-                    .tag(SettingsNavigation.Tab.translation)
-                GeneralSettings(settings: settings)
-                    .tabItem { Label("通用", systemImage: "gearshape") }
-                    .tag(SettingsNavigation.Tab.general)
+            Picker("", selection: $navigation.tab) {
+                Text("划词").tag(SettingsNavigation.Tab.selection)
+                Text("翻译").tag(SettingsNavigation.Tab.translation)
+                Text("通用").tag(SettingsNavigation.Tab.general)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+
+            Group {
+                switch navigation.tab {
+                case .selection: SelectionSettings(settings: settings, permission: permission)
+                case .translation: TranslationSettings(settings: settings)
+                case .general: GeneralSettings(settings: settings)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .frame(maxHeight: .infinity)
         }
-        .frame(width: 520, height: 660)
         .onAppear { permission.refresh() }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            BarTransLogo(size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("bartrans")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Text("划词翻译 · 查词 · 版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 6) {
+            IconButton(systemName: "chevron.left", help: "返回") { onBack() }
+                .keyboardShortcut(.cancelAction)
+            Text("设置")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
             Spacer()
             PermissionBadge(isTrusted: permission.isTrusted)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.leading, 10)
+        .padding(.trailing, 14)
+        .frame(height: 42)
     }
 }
 
@@ -418,6 +421,19 @@ private struct GeneralSettings: View {
                         Text(engine.label).tag(engine)
                     }
                 }
+            }
+
+            Section {
+                LabeledContent("版本") {
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("源代码") {
+                    Link("github.com/czllll/bartrans", destination: URL(string: "https://github.com/czllll/bartrans")!)
+                }
+                Button("退出 bartrans") { NSApp.terminate(nil) }
+            } header: {
+                Text("关于")
             }
 
             Section {

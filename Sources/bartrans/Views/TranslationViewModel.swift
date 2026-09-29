@@ -40,6 +40,33 @@ final class TranslationViewModel: ObservableObject {
         return direction.label(primary: settings.primary, secondary: settings.secondary)
     }
 
+    /// 语言栏显示用：输入框有内容时实时识别，否则按当前方向给出默认值
+    var languagePreview: (source: String, target: String) {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let primary = settings.primary, secondary = settings.secondary
+        guard !text.isEmpty else {
+            switch direction {
+            case .auto: return ("自动检测", primary.name)
+            case .toSecondary: return (primary.name, secondary.name)
+            case .toPrimary: return (secondary.name, primary.name)
+            }
+        }
+        let languages = direction.resolve(for: text, primary: primary, secondary: secondary)
+        let sourceName = languages.source.map { AppLanguage.named($0).name } ?? "未知语言"
+        return (direction == .auto ? "自动 · \(sourceName)" : sourceName, AppLanguage.named(languages.target).name)
+    }
+
+    /// 语言栏中间的互换按钮：在"母语→外语"和"→母语"之间切换
+    func swapDirection() {
+        let resolvedTarget = direction.resolve(for: inputText, primary: settings.primary, secondary: settings.secondary).target
+        switch direction {
+        case .toSecondary: direction = .toPrimary
+        case .toPrimary: direction = .toSecondary
+        case .auto: direction = settings.primary.matches(resolvedTarget) ? .toSecondary : .toPrimary
+        }
+        retranslateIfNeeded()
+    }
+
     /// 完整语言名，例如"英文 → 简体中文"
     var directionFullLabel: String {
         if let resolvedLanguages, !inputText.isEmpty {

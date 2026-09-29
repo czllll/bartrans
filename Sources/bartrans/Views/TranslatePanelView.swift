@@ -194,7 +194,7 @@ struct TranslatePanelView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            EngineMenu(viewModel: viewModel)
+            EngineMenu(viewModel: viewModel, onOpenSettings: onOpenSettings)
 
             Spacer()
 

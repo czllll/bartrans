@@ -10,7 +10,7 @@ enum EngineKind: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .system: return "系统离线"
+        case .system: return "Apple 离线"
         case .llm: return "LLM"
         }
     }
@@ -122,6 +122,15 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(anthropicModel, forKey: Keys.anthropicModel) }
     }
 
+    /// 菜单里可快速切换的备选模型（逗号分隔），和当前模型共用同一个 Key / Base URL
+    @Published var anthropicExtraModels: String {
+        didSet { defaults.set(anthropicExtraModels, forKey: Keys.anthropicExtraModels) }
+    }
+
+    @Published var openAIExtraModels: String {
+        didSet { defaults.set(openAIExtraModels, forKey: Keys.openAIExtraModels) }
+    }
+
     @Published var openAIBaseURL: String {
         didSet { defaults.set(openAIBaseURL, forKey: Keys.openAIBaseURL) }
     }
@@ -182,6 +191,8 @@ final class AppSettings: ObservableObject {
         static let llmProvider = "com.transpop.bartrans.llmProvider"
         static let anthropicModel = "com.transpop.bartrans.anthropicModel"
         static let openAIBaseURL = "com.transpop.bartrans.openAIBaseURL"
+        static let anthropicExtraModels = "com.transpop.bartrans.anthropicExtraModels"
+        static let openAIExtraModels = "com.transpop.bartrans.openAIExtraModels"
         static let openAIModel = "com.transpop.bartrans.openAIModel"
         static let primaryLanguage = "com.transpop.bartrans.primaryLanguage"
         static let secondaryLanguage = "com.transpop.bartrans.secondaryLanguage"
@@ -201,6 +212,8 @@ final class AppSettings: ObservableObject {
         defaultEngine = EngineKind(rawValue: defaults.string(forKey: Keys.defaultEngine) ?? "") ?? .system
         llmProvider = LLMProvider(rawValue: defaults.string(forKey: Keys.llmProvider) ?? "") ?? .anthropic
         anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? Self.defaultAnthropicModel
+        anthropicExtraModels = defaults.string(forKey: Keys.anthropicExtraModels) ?? "claude-haiku-4-5, claude-sonnet-5-5"
+        openAIExtraModels = defaults.string(forKey: Keys.openAIExtraModels) ?? ""
         openAIBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? Self.defaultOpenAIBaseURL
         openAIModel = defaults.string(forKey: Keys.openAIModel) ?? Self.defaultOpenAIModel
         primaryLanguage = defaults.string(forKey: Keys.primaryLanguage) ?? "zh-Hans"
@@ -212,6 +225,37 @@ final class AppSettings: ObservableObject {
         searchEngine = SearchEngine(rawValue: defaults.string(forKey: Keys.searchEngine) ?? "") ?? .google
         excludedApps = defaults.stringArray(forKey: Keys.excludedApps) ?? []
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    func currentModel(for provider: LLMProvider) -> String {
+        let model: String
+        switch provider {
+        case .anthropic: model = anthropicModel
+        case .openAICompatible: model = openAIModel
+        }
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return provider == .anthropic ? Self.defaultAnthropicModel : Self.defaultOpenAIModel
+        }
+        return trimmed
+    }
+
+    func setCurrentModel(_ model: String, for provider: LLMProvider) {
+        switch provider {
+        case .anthropic: anthropicModel = model
+        case .openAICompatible: openAIModel = model
+        }
+    }
+
+    /// 当前模型 + 备选模型，去重后按填写顺序排列
+    func models(for provider: LLMProvider) -> [String] {
+        let extras = provider == .anthropic ? anthropicExtraModels : openAIExtraModels
+        var result: [String] = []
+        for model in [currentModel(for: provider)] + extras.split(whereSeparator: { $0 == "," || $0 == "，" || $0.isNewline }).map(String.init) {
+            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, !result.contains(trimmed) { result.append(trimmed) }
+        }
+        return result
     }
 
     func isExcluded(bundleID: String?) -> Bool {

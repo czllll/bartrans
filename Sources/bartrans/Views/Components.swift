@@ -83,19 +83,25 @@ struct ShimmerLines: View {
     }
 }
 
+/// 下拉菜单里的一项。
+struct PopUpMenuItem {
+    var title: String
+    var systemImage: String?
+    var isOn: Bool = false
+    var isSeparator = false
+    var isHeader = false
+    var action: () -> Void = {}
+
+    static var separator: PopUpMenuItem { PopUpMenuItem(title: "", isSeparator: true) }
+    static func header(_ title: String) -> PopUpMenuItem { PopUpMenuItem(title: title, isHeader: true) }
+}
+
 /// 一个带自定义外观的下拉菜单按钮。
 ///
 /// SwiftUI `Menu` 在 macOS 上会被渲染成 NSPopUpButton，自定义字号、图标都会被忽略，
 /// 所以这里用普通按钮 + 在鼠标位置弹出 NSMenu 来实现。
 struct PopUpMenuButton<Label: View>: View {
-    struct Item {
-        var title: String
-        var systemImage: String?
-        var isOn: Bool
-        var action: () -> Void
-    }
-
-    let items: () -> [Item]
+    let items: () -> [PopUpMenuItem]
     @ViewBuilder var label: Label
 
     @State private var hovering = false
@@ -104,6 +110,14 @@ struct PopUpMenuButton<Label: View>: View {
         Button {
             let menu = NSMenu()
             for item in items() {
+                if item.isSeparator {
+                    menu.addItem(.separator())
+                    continue
+                }
+                if item.isHeader {
+                    menu.addItem(.sectionHeader(title: item.title))
+                    continue
+                }
                 let menuItem = ClosureMenuItem(title: item.title, action: item.action)
                 menuItem.state = item.isOn ? .on : .off
                 if let systemImage = item.systemImage {
@@ -171,19 +185,14 @@ struct DirectionMenu: View {
     }
 }
 
-/// 引擎选择：Apple 离线 / LLM。
+/// 引擎选择：Apple 离线，或者某个 LLM 服务下的某个模型。
+/// 选模型会同时切换全局的 LLM 服务与模型设置。
 struct EngineMenu: View {
     @ObservedObject var viewModel: TranslationViewModel
+    var onOpenSettings: (() -> Void)?
 
     var body: some View {
-        PopUpMenuButton(items: {
-            EngineKind.allCases.map { engine in
-                .init(title: engine.label, systemImage: engine.icon, isOn: viewModel.selectedEngine == engine) {
-                    viewModel.selectedEngine = engine
-                    viewModel.retranslateIfNeeded()
-                }
-            }
-        }) {
+        PopUpMenuButton(items: menuItems) {
             HStack(spacing: 4) {
                 Image(systemName: viewModel.selectedEngine.icon)
                     .font(.system(size: 9.5, weight: .semibold))
@@ -193,7 +202,42 @@ struct EngineMenu: View {
                     .fixedSize()
             }
         }
-        .help("切换翻译引擎")
+        .help("切换翻译引擎 / 模型")
+    }
+
+    func menuItems() -> [PopUpMenuItem] {
+        let settings = viewModel.settings
+        var items: [PopUpMenuItem] = [
+            .init(title: EngineKind.system.label, systemImage: EngineKind.system.icon, isOn: viewModel.selectedEngine == .system) {
+                select(.system)
+            }
+        ]
+        for provider in LLMProvider.allCases {
+            items.append(.separator)
+            items.append(.header(provider.label))
+            for model in settings.models(for: provider) {
+                let isOn = viewModel.selectedEngine == .llm && settings.llmProvider == provider && settings.currentModel(for: provider) == model
+                items.append(.init(title: model, systemImage: "sparkles", isOn: isOn) {
+                    settings.llmProvider = provider
+                    settings.setCurrentModel(model, for: provider)
+                    select(.llm)
+                })
+            }
+        }
+        if let onOpenSettings {
+            items.append(.separator)
+            items.append(.init(title: "管理模型…", systemImage: "slider.horizontal.3") {
+                SettingsNavigation.shared.tab = .translation
+                onOpenSettings()
+            })
+        }
+        return items
+    }
+
+    private func select(_ engine: EngineKind) {
+        viewModel.selectedEngine = engine
+        // 切换模型时即便引擎没变也要重新翻译
+        viewModel.retranslateIfNeeded()
     }
 }
 

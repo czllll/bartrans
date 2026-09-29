@@ -4,23 +4,21 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var permission: AccessibilityPermission
 
-    @State private var tab: Tab = .selection
-
-    enum Tab: Hashable { case selection, translation, general }
+    @ObservedObject private var navigation = SettingsNavigation.shared
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            TabView(selection: $tab) {
+            TabView(selection: $navigation.tab) {
                 SelectionSettings(settings: settings, permission: permission)
                     .tabItem { Label("划词", systemImage: "text.cursor") }
-                    .tag(Tab.selection)
+                    .tag(SettingsNavigation.Tab.selection)
                 TranslationSettings(settings: settings)
                     .tabItem { Label("翻译", systemImage: "character.bubble") }
-                    .tag(Tab.translation)
+                    .tag(SettingsNavigation.Tab.translation)
                 GeneralSettings(settings: settings)
                     .tabItem { Label("通用", systemImage: "gearshape") }
-                    .tag(Tab.general)
+                    .tag(SettingsNavigation.Tab.general)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
@@ -46,6 +44,14 @@ struct SettingsView: View {
         .padding(.top, 16)
         .padding(.bottom, 10)
     }
+}
+
+/// 让别处（例如引擎菜单里的"管理模型…"）可以直接打开设置的某个标签页。
+@MainActor
+final class SettingsNavigation: ObservableObject {
+    static let shared = SettingsNavigation()
+    enum Tab: Hashable { case selection, translation, general }
+    @Published var tab: Tab = .selection
 }
 
 private struct PermissionBadge: View {
@@ -192,13 +198,17 @@ private struct TranslationSettings: View {
 
                 switch settings.llmProvider {
                 case .anthropic:
-                    TextField("模型", text: $settings.anthropicModel, prompt: Text(AppSettings.defaultAnthropicModel))
+                    TextField("当前模型", text: $settings.anthropicModel, prompt: Text(AppSettings.defaultAnthropicModel))
+                        .font(.system(size: 12, design: .monospaced))
+                    TextField("备选模型", text: $settings.anthropicExtraModels, prompt: Text("多个用逗号分隔"))
                         .font(.system(size: 12, design: .monospaced))
                     keyRow(input: $anthropicKeyInput, account: .anthropicAPIKey, provider: .anthropic)
                 case .openAICompatible:
                     TextField("Base URL", text: $settings.openAIBaseURL, prompt: Text(AppSettings.defaultOpenAIBaseURL))
                         .font(.system(size: 12, design: .monospaced))
-                    TextField("模型", text: $settings.openAIModel, prompt: Text(AppSettings.defaultOpenAIModel))
+                    TextField("当前模型", text: $settings.openAIModel, prompt: Text(AppSettings.defaultOpenAIModel))
+                        .font(.system(size: 12, design: .monospaced))
+                    TextField("备选模型", text: $settings.openAIExtraModels, prompt: Text("如 deepseek-chat, deepseek-reasoner"))
                         .font(.system(size: 12, design: .monospaced))
                     keyRow(input: $openAIKeyInput, account: .openAICompatibleAPIKey, provider: .openAICompatible)
                 }
@@ -206,8 +216,8 @@ private struct TranslationSettings: View {
                 Text("LLM 引擎")
             } footer: {
                 Text(settings.llmProvider == .anthropic
-                     ? "划词追求速度，可以用 claude-haiku-4-5。API Key 保存在钥匙串中。"
-                     : "兼容 OpenAI、DeepSeek、Ollama、LM Studio 等；本地地址可不填 Key。API Key 保存在钥匙串中。")
+                     ? "备选模型会出现在翻译面板的引擎菜单里，一键切换。划词追求速度可以用 claude-haiku-4-5。API Key 保存在钥匙串中。"
+                     : "兼容 OpenAI、DeepSeek、Ollama、LM Studio 等；本地地址可不填 Key。备选模型会出现在翻译面板的引擎菜单里，一键切换。")
                     .settingsFootnote()
             }
         }

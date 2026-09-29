@@ -67,7 +67,7 @@ struct ResultPanelView: View {
 
             Spacer(minLength: 4)
 
-            EngineMenu(viewModel: viewModel)
+            EngineMenu(viewModel: viewModel, onOpenSettings: onOpenSettings)
 
             HStack(spacing: 0) {
                 IconButton(

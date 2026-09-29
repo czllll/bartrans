@@ -135,14 +135,9 @@ struct TranslatePanelView: View {
             ) { viewModel.translate() }
 
             if viewModel.inputText.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("输入或粘贴文字")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.tertiary)
-                    Text("↩ 翻译  ·  ⇧↩ 换行")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.quaternary)
-                }
+                Text("输入或粘贴文字")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.tertiary)
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
                 .allowsHitTesting(false)

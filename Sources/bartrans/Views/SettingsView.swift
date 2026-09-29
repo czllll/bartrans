@@ -89,14 +89,8 @@ private struct SelectionSettings: View {
                         Image(systemName: "hand.raised.fill")
                             .font(.system(size: 18))
                             .foregroundStyle(.orange)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("开启「辅助功能」权限")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("读取其它 App 中选中的文字需要这项权限。在「系统设置 → 隐私与安全性 → 辅助功能」中打开 bartrans；若已在列表中但不生效，先用「−」删除再重新添加。")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        Text("开启「辅助功能」权限")
+                            .font(.system(size: 13, weight: .semibold))
                         Spacer(minLength: 0)
                         Button("去开启") {
                             permission.request()
@@ -123,16 +117,10 @@ private struct SelectionSettings: View {
                         Text(preset.label).tag(preset)
                     }
                 }
-            } footer: {
-                Text("拖选、双击、三击或 Shift+点击都会触发。没有选中文字时按快捷键，会打开菜单栏面板。")
-                    .settingsFootnote()
             }
 
             Section {
-                Toggle("兼容模式（模拟 ⌘C 读取）", isOn: $settings.clipboardFallback)
-            } footer: {
-                Text("Chrome、VS Code 等 App 不通过辅助功能提供选中文字。开启后会短暂借用剪贴板，读完立即还原。")
-                    .settingsFootnote()
+                Toggle("兼容模式", isOn: $settings.clipboardFallback)
             }
 
             Section {
@@ -158,9 +146,6 @@ private struct SelectionSettings: View {
                 }
             } header: {
                 Text("已停用划词的 App")
-            } footer: {
-                Text("在某个 App 中右键点击菜单栏图标，可以停用 / 恢复该 App 的划词。")
-                    .settingsFootnote()
             }
         }
         .formStyle(.grouped)
@@ -186,9 +171,6 @@ private struct TranslationSettings: View {
                         Label(engine.label, systemImage: engine.icon).tag(engine)
                     }
                 }
-            } footer: {
-                Text("自动识别时：外文译成母语，母语译成常用外语。")
-                    .settingsFootnote()
             }
 
             Section {
@@ -212,11 +194,6 @@ private struct TranslationSettings: View {
                 }
             } header: {
                 Text("LLM 引擎")
-            } footer: {
-                Text(settings.llmProvider == .anthropic
-                     ? "备选模型会出现在翻译面板的引擎菜单里，一键切换。划词追求速度可以用 claude-haiku-4-5。API Key 保存在钥匙串中。"
-                     : "兼容 OpenAI、DeepSeek、OpenRouter、Ollama、LM Studio 等；Base URL 填到 /v1 为止；OpenRouter 的模型要带厂商前缀，如 deepseek/deepseek-v4.1-flash。本地地址可不填 Key。备选模型会出现在翻译面板的引擎菜单里，一键切换。")
-                    .settingsFootnote()
             }
 
             LLMTestSection(
@@ -295,9 +272,6 @@ private struct LLMTestSection: View {
     var body: some View {
         Section {
             HStack {
-                Text("用一句英文实际请求一次，检查 Key、地址和模型是否可用")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
                 Spacer()
                 if isRunning {
                     Button("停止") { stop() }
@@ -436,15 +410,6 @@ private struct GeneralSettings: View {
                 Text("关于")
             }
 
-            Section {
-                LabeledContent("划词") { Text("选中文字").foregroundStyle(.secondary) }
-                LabeledContent("翻译选中文字") { Text(settings.hotKey.label).foregroundStyle(.secondary) }
-                LabeledContent("面板内翻译 / 换行") { Text("↩  /  ⇧↩").foregroundStyle(.secondary) }
-                LabeledContent("复制译文") { Text("⇧⌘C").foregroundStyle(.secondary) }
-                LabeledContent("关闭浮窗") { Text("Esc").foregroundStyle(.secondary) }
-            } header: {
-                Text("快捷操作")
-            }
         }
         .formStyle(.grouped)
     }
@@ -475,10 +440,3 @@ private struct AppIconView: View {
     }
 }
 
-private extension Text {
-    func settingsFootnote() -> some View {
-        self.font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}

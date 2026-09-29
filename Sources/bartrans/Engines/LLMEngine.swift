@@ -140,22 +140,27 @@ final class AnthropicEngine: TranslationEngine {
 
     private let settings: AppSettings
     private let keychain: KeychainHelper
+    /// 设置页"测试"时用输入框里尚未保存的 Key / 指定模型
+    private let apiKeyOverride: String?
+    private let modelOverride: String?
 
-    init(settings: AppSettings, keychain: KeychainHelper = .shared) {
+    init(settings: AppSettings, keychain: KeychainHelper = .shared, apiKeyOverride: String? = nil, modelOverride: String? = nil) {
         self.settings = settings
         self.keychain = keychain
+        self.apiKeyOverride = apiKeyOverride
+        self.modelOverride = modelOverride
     }
 
     func translate(_ request: TranslationRequest) -> AsyncThrowingStream<String, Error> {
         let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return failing(TranslationError.emptyInput) }
-        guard let apiKey = keychain.load(for: .anthropicAPIKey), !apiKey.isEmpty else {
+        guard let apiKey = apiKeyOverride ?? keychain.load(for: .anthropicAPIKey), !apiKey.isEmpty else {
             return failing(TranslationError.apiKeyMissing)
         }
 
         var request = request
         request.text = trimmed
-        let configuredModel = MainActor.assumeIsolated { settings.anthropicModel }
+        let configuredModel = modelOverride ?? MainActor.assumeIsolated { settings.anthropicModel }
         let model = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let body: [String: Any] = [
@@ -196,22 +201,28 @@ final class OpenAICompatibleEngine: TranslationEngine {
 
     private let settings: AppSettings
     private let keychain: KeychainHelper
+    /// 设置页"测试"时用输入框里尚未保存的 Key / 指定模型
+    private let apiKeyOverride: String?
+    private let modelOverride: String?
 
-    init(settings: AppSettings, keychain: KeychainHelper = .shared) {
+    init(settings: AppSettings, keychain: KeychainHelper = .shared, apiKeyOverride: String? = nil, modelOverride: String? = nil) {
         self.settings = settings
         self.keychain = keychain
+        self.apiKeyOverride = apiKeyOverride
+        self.modelOverride = modelOverride
     }
 
     func translate(_ request: TranslationRequest) -> AsyncThrowingStream<String, Error> {
         let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return failing(TranslationError.emptyInput) }
 
-        let (baseURL, model) = MainActor.assumeIsolated { (settings.openAIBaseURL, settings.openAIModel) }
+        let (baseURL, configuredModel) = MainActor.assumeIsolated { (settings.openAIBaseURL, settings.openAIModel) }
+        let model = modelOverride ?? configuredModel
         let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let isLocal = trimmedBase.contains("localhost") || trimmedBase.contains("127.0.0.1")
 
         // 本地模型（Ollama / LM Studio）通常不需要 Key
-        let apiKey = keychain.load(for: .openAICompatibleAPIKey) ?? ""
+        let apiKey = apiKeyOverride ?? keychain.load(for: .openAICompatibleAPIKey) ?? ""
         guard !apiKey.isEmpty || isLocal else { return failing(TranslationError.apiKeyMissing) }
 
         let endpointString = trimmedBase.hasSuffix("/") ? trimmedBase + "chat/completions" : trimmedBase + "/chat/completions"
@@ -276,5 +287,40 @@ final class LLMEngine: TranslationEngine {
         case .openAICompatible:
             return openAICompatible.translate(request)
         }
+    }
+}
+
+/// 设置页的"测试"：用一句很短的话实际请求一次，报告是否可用、首字延迟和总耗时。
+enum LLMConnectionTester {
+    struct Report {
+        var model: String
+        var output: String
+        var firstTokenLatency: TimeInterval
+        var totalLatency: TimeInterval
+    }
+
+    static let sample = "Hello, world! Translation looks good."
+
+    @MainActor
+    static func run(provider: LLMProvider, model: String, apiKey: String, settings: AppSettings) async throws -> Report {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let engine: TranslationEngine
+        switch provider {
+        case .anthropic:
+            engine = AnthropicEngine(settings: settings, apiKeyOverride: key, modelOverride: model)
+        case .openAICompatible:
+            engine = OpenAICompatibleEngine(settings: settings, apiKeyOverride: key, modelOverride: model)
+        }
+
+        let request = TranslationRequest(text: sample, languages: .init(source: "en", target: settings.primaryLanguage))
+        let start = Date()
+        var firstToken: TimeInterval?
+        var output = ""
+        for try await partial in engine.translate(request) {
+            if firstToken == nil { firstToken = Date().timeIntervalSince(start) }
+            output = partial
+        }
+        let total = Date().timeIntervalSince(start)
+        return Report(model: model, output: output, firstTokenLatency: firstToken ?? total, totalLatency: total)
     }
 }

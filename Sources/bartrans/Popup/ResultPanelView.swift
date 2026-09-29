@@ -141,7 +141,7 @@ struct ResultPanelView: View {
         } else if let entry = viewModel.wordEntry {
             wordEntryView(entry)
         } else {
-            CappedScrollView(maxHeight: 300) {
+            CappedScrollView(maxHeight: state.maxBodyHeight) {
                 Text(viewModel.outputText)
                     .font(.system(size: viewModel.isWordMode ? 18 : 15, weight: viewModel.isWordMode ? .medium : .regular))
                     .lineSpacing(4)
@@ -253,7 +253,7 @@ struct ResultPanelView: View {
             }
 
             if dictionaryExpanded {
-                CappedScrollView(maxHeight: 180) {
+                CappedScrollView(maxHeight: min(180, state.maxBodyHeight * 0.6)) {
                     Text(definition)
                         .font(.system(size: 12))
                         .lineSpacing(3)
@@ -337,4 +337,6 @@ final class ResultPanelState: ObservableObject {
     @Published var isPinned = false
     /// 原文所在位置可编辑时才显示"替换"
     @Published var canReplace = false
+    /// 译文区域的最大高度：按选区旁剩余的屏幕空间计算，保证浮窗不会被挤到选区上
+    @Published var maxBodyHeight: CGFloat = 300
 }

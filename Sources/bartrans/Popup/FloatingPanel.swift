@@ -42,10 +42,31 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
 
-    /// 以某个点为参考摆放面板：水平居中于 `x`，顶边位于 `top`。
-    func show(centeredAt x: CGFloat, top: CGFloat, makeKey: Bool) {
+    /// 面板在竖直方向上固定哪条边。内容变化（流式输出、展开词典）时，
+    /// 固定的那条边不动，面板朝远离选区的方向伸缩，从而不会盖住选中的文字。
+    enum VerticalAnchor {
+        /// 顶边固定在 y，向下长——面板在选区下方时用
+        case top(CGFloat)
+        /// 底边固定在 y，向上长——面板在选区上方时用
+        case bottom(CGFloat)
+    }
+
+    private var growsUpward = false
+
+    /// 水平居中于 `x`，竖直方向按 `anchor` 摆放。
+    func show(centeredAt x: CGFloat, anchor: VerticalAnchor, makeKey: Bool) {
         let size = contentSizeKnown ? frame.size : (contentView?.fittingSize ?? frame.size)
-        setFrame(clamped(NSRect(x: x - size.width / 2, y: top - size.height, width: size.width, height: size.height)), display: true)
+        let y: CGFloat
+        switch anchor {
+        case .top(let top):
+            growsUpward = false
+            y = top - size.height
+        case .bottom(let bottom):
+            growsUpward = true
+            y = bottom
+        }
+        setFrame(clamped(NSRect(x: x - size.width / 2, y: y, width: size.width, height: size.height)), display: true)
+
         let wasVisible = isVisible
         if !wasVisible { alphaValue = 0 }
         if makeKey {
@@ -64,15 +85,15 @@ final class FloatingPanel: NSPanel {
     private func fit(to size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
         contentSizeKnown = true
-        let top = frame.maxY
-        let rect = NSRect(x: frame.midX - size.width / 2, y: top - size.height, width: size.width, height: size.height)
+        let y = growsUpward ? frame.minY : frame.maxY - size.height
+        let rect = NSRect(x: frame.midX - size.width / 2, y: y, width: size.width, height: size.height)
         setFrame(clamped(rect), display: true)
     }
 
     /// 始终完整留在屏幕可见区域内。
     private func clamped(_ rect: NSRect) -> NSRect {
         var rect = rect
-        let screen = ScreenGeometry.screen(containing: NSPoint(x: rect.midX, y: rect.maxY)) ?? NSScreen.main
+        let screen = ScreenGeometry.screen(containing: NSPoint(x: rect.midX, y: growsUpward ? rect.minY : rect.maxY)) ?? NSScreen.main
         if let visible = screen?.visibleFrame {
             rect.origin.x = min(max(rect.minX, visible.minX + 4), visible.maxX - rect.width - 4)
             if rect.minY < visible.minY + 4 {

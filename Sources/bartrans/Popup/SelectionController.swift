@@ -136,28 +136,46 @@ final class SelectionController {
             }
             let mouse = NSEvent.mouseLocation
             self.current = selection
-            self.anchor = Self.anchor(for: selection, gesture: .init(start: mouse, end: mouse))
+            self.anchor = Self.anchor(for: selection, gesture: .init(start: mouse, end: mouse), trustBounds: true)
             self.showResult(for: selection.text)
         }
     }
 
-    private static func anchor(for selection: SelectedText, gesture: SelectionMonitor.Gesture) -> Anchor {
+    /// 估算选区在屏幕上的上下边界。
+    ///
+    /// - `trustBounds`: 快捷键触发时鼠标未必在选区上，只要辅助功能给了选区矩形就直接用。
+    private static func anchor(for selection: SelectedText, gesture: SelectionMonitor.Gesture, trustBounds: Bool = false) -> Anchor {
         let sameLine = abs(gesture.start.y - gesture.end.y) < 8
         let x = sameLine ? (gesture.start.x + gesture.end.x) / 2 : gesture.end.x
 
-        // 辅助功能给出的选区矩形在部分 App 里不可靠（例如返回整个文本框），
-        // 只在它看起来像"几行文字"并且离鼠标不远时才采用。
-        if let bounds = selection.bounds,
-           bounds.height < 160,
-           abs(bounds.midY - gesture.end.y) < 200,
-           bounds.minX - 50 < gesture.end.x, gesture.end.x < bounds.maxX + 50 {
-            return Anchor(x: sameLine && bounds.width < 600 ? bounds.midX : x, top: bounds.maxY, bottom: bounds.minY)
+        if let bounds = selection.bounds, isPlausible(bounds, near: gesture.end, trustBounds: trustBounds) {
+            let centerX = (trustBounds || (sameLine && bounds.width < 600)) ? bounds.midX : x
+            return Anchor(x: centerX, top: bounds.maxY, bottom: bounds.minY)
         }
+
+        // 拿不到选区矩形时用鼠标按下 / 抬起的位置推算：I 形光标的热点大约在文字行的中间，
+        // 上下各留出半行多一点的余量，大字号也不容易被盖住。
+        let halfLine: CGFloat = 16
         return Anchor(
             x: x,
-            top: max(gesture.start.y, gesture.end.y) + 10,
-            bottom: min(gesture.start.y, gesture.end.y) - 12
+            top: max(gesture.start.y, gesture.end.y) + halfLine,
+            bottom: min(gesture.start.y, gesture.end.y) - halfLine
         )
+    }
+
+    /// 辅助功能给出的选区矩形在部分 App 里不可靠（例如返回整个文本框、坐标系不对），
+    /// 只有看起来确实是"鼠标附近的几行文字"时才采用。
+    private static func isPlausible(_ bounds: NSRect, near point: NSPoint, trustBounds: Bool) -> Bool {
+        guard bounds.width > 1, bounds.height > 1 else { return false }
+        let screenHeight = ScreenGeometry.screen(containing: point)?.frame.height ?? 1000
+        guard bounds.height < screenHeight * 0.7 else { return false }
+        if trustBounds {
+            return NSScreen.screens.contains { $0.frame.intersects(bounds) }
+        }
+        if bounds.insetBy(dx: -40, dy: -40).contains(point) { return true }
+        return bounds.height < 160
+            && abs(bounds.midY - point.y) < 200
+            && bounds.minX - 50 < point.x && point.x < bounds.maxX + 50
     }
 
     // MARK: - Action bar
@@ -165,11 +183,14 @@ final class SelectionController {
     private func showActionBar() {
         guard let anchor else { return }
         let height = actionBar.contentView?.fittingSize.height ?? 42
-        let visibleTop = ScreenGeometry.screen(containing: NSPoint(x: anchor.x, y: anchor.top))?.visibleFrame.maxY ?? .greatestFiniteMagnitude
+        let visible = ScreenGeometry.screen(containing: NSPoint(x: anchor.x, y: anchor.top))?.visibleFrame
 
-        // 默认在选区上方；上方放不下时放到选区下方
-        let top = anchor.top + height < visibleTop ? anchor.top + height : anchor.bottom
-        actionBar.show(centeredAt: anchor.x, top: top, makeKey: false)
+        // 默认在选区上方；上方放不下时放到选区下方。面板自带透明留白，贴边即可。
+        if let visible, anchor.top + height > visible.maxY {
+            actionBar.show(centeredAt: anchor.x, anchor: .top(anchor.bottom), makeKey: false)
+        } else {
+            actionBar.show(centeredAt: anchor.x, anchor: .bottom(anchor.top), makeKey: false)
+        }
         scheduleActionBarHide()
     }
 
@@ -222,17 +243,30 @@ final class SelectionController {
 
         let anchor = anchor ?? {
             let mouse = NSEvent.mouseLocation
-            return Anchor(x: mouse.x, top: mouse.y + 10, bottom: mouse.y - 12)
+            return Anchor(x: mouse.x, top: mouse.y + 16, bottom: mouse.y - 16)
         }()
-
-        // 默认放在选区下方；下方空间不够时放到选区上方
-        let visibleBottom = ScreenGeometry.screen(containing: NSPoint(x: anchor.x, y: anchor.bottom))?.visibleFrame.minY ?? 0
-        let estimatedHeight: CGFloat = 220
-        let top = anchor.bottom - estimatedHeight > visibleBottom ? anchor.bottom - 4 : anchor.top + estimatedHeight
 
         // 已固定的浮窗保持原位，只更新内容
         if resultPanel.isVisible && panelState.isPinned { return }
-        resultPanel.show(centeredAt: anchor.x, top: top, makeKey: false)
+
+        // 放在选区下方或上方，取决于哪边空间够；面板只朝远离选区的方向伸展，
+        // 译文区域的最大高度也按那一侧剩余空间限制，所以不会盖住选中的文字。
+        let visible = ScreenGeometry.screen(containing: NSPoint(x: anchor.x, y: anchor.bottom))?.visibleFrame
+            ?? NSScreen.main?.visibleFrame ?? .zero
+        let spaceBelow = anchor.bottom - visible.minY
+        let spaceAbove = visible.maxY - anchor.top
+        let comfortable: CGFloat = 320
+        let placeBelow = spaceBelow >= comfortable || spaceBelow >= spaceAbove
+        let space = placeBelow ? spaceBelow : spaceAbove
+
+        // 除译文外，标题栏、原文、底栏和阴影留白大约占 200pt
+        panelState.maxBodyHeight = min(300, max(80, space - 200))
+
+        resultPanel.show(
+            centeredAt: anchor.x,
+            anchor: placeBelow ? .top(anchor.bottom) : .bottom(anchor.top),
+            makeKey: false
+        )
     }
 
     private func hideResult() {

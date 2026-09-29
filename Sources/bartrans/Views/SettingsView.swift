@@ -23,7 +23,7 @@ struct SettingsView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
         }
-        .frame(width: 520, height: 600)
+        .frame(width: 520, height: 660)
         .onAppear { permission.refresh() }
     }
 
@@ -199,17 +199,12 @@ private struct TranslationSettings: View {
                 switch settings.llmProvider {
                 case .anthropic:
                     TextField("当前模型", text: $settings.anthropicModel, prompt: Text(AppSettings.defaultAnthropicModel))
-                        .font(.system(size: 12, design: .monospaced))
                     TextField("备选模型", text: $settings.anthropicExtraModels, prompt: Text("多个用逗号分隔"))
-                        .font(.system(size: 12, design: .monospaced))
                     keyRow(input: $anthropicKeyInput, account: .anthropicAPIKey, provider: .anthropic)
                 case .openAICompatible:
                     TextField("Base URL", text: $settings.openAIBaseURL, prompt: Text(AppSettings.defaultOpenAIBaseURL))
-                        .font(.system(size: 12, design: .monospaced))
                     TextField("当前模型", text: $settings.openAIModel, prompt: Text(AppSettings.defaultOpenAIModel))
-                        .font(.system(size: 12, design: .monospaced))
                     TextField("备选模型", text: $settings.openAIExtraModels, prompt: Text("如 deepseek-chat, deepseek-reasoner"))
-                        .font(.system(size: 12, design: .monospaced))
                     keyRow(input: $openAIKeyInput, account: .openAICompatibleAPIKey, provider: .openAICompatible)
                 }
             } header: {
@@ -220,6 +215,11 @@ private struct TranslationSettings: View {
                      : "兼容 OpenAI、DeepSeek、Ollama、LM Studio 等；本地地址可不填 Key。备选模型会出现在翻译面板的引擎菜单里，一键切换。")
                     .settingsFootnote()
             }
+
+            LLMTestSection(
+                settings: settings,
+                apiKey: settings.llmProvider == .anthropic ? anthropicKeyInput : openAIKeyInput
+            )
         }
         .formStyle(.grouped)
         .onAppear {
@@ -265,6 +265,141 @@ private struct TranslationSettings: View {
                 .help("清除")
                 .disabled(input.wrappedValue.isEmpty)
             }
+        }
+    }
+}
+
+// MARK: - LLM 测试
+
+/// 用输入框里当前的配置（包括还没保存的 Key）实际请求一次，检查是否可用、速度如何。
+private struct LLMTestSection: View {
+    @ObservedObject var settings: AppSettings
+    let apiKey: String
+
+    private enum Outcome {
+        case running
+        case success(LLMConnectionTester.Report)
+        case failure(String)
+    }
+
+    @State private var results: [String: Outcome] = [:]
+    @State private var order: [String] = []
+    @State private var task: Task<Void, Never>?
+
+    private var models: [String] { settings.models(for: settings.llmProvider) }
+    private var isRunning: Bool { task != nil }
+
+    var body: some View {
+        Section {
+            HStack {
+                Text("用一句英文实际请求一次，检查 Key、地址和模型是否可用")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                Spacer()
+                if isRunning {
+                    Button("停止") { stop() }
+                } else {
+                    Button("测试当前模型") { run([settings.currentModel(for: settings.llmProvider)]) }
+                    if models.count > 1 {
+                        Button("测试全部") { run(models) }
+                    }
+                }
+            }
+
+            ForEach(order, id: \.self) { model in
+                if let outcome = results[model] {
+                    resultRow(model: model, outcome: outcome)
+                }
+            }
+        } header: {
+            Text("连接测试")
+        }
+        .onChange(of: settings.llmProvider) { stop(); results = [:]; order = [] }
+    }
+
+    @ViewBuilder
+    private func resultRow(model: String, outcome: Outcome) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            switch outcome {
+            case .running:
+                ProgressView().controlSize(.small).frame(width: 16)
+            case .success:
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).frame(width: 16)
+            case .failure:
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.red).frame(width: 16)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(model)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    Spacer()
+                    if case .success(let report) = outcome {
+                        Text("首字 \(Self.format(report.firstTokenLatency)) · 共 \(Self.format(report.totalLatency))")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Self.speedColor(report.firstTokenLatency))
+                    }
+                }
+                switch outcome {
+                case .running:
+                    Text("请求中…").font(.system(size: 11)).foregroundStyle(.secondary)
+                case .success(let report):
+                    Text("“\(report.output)”")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                case .failure(let message):
+                    Text(message)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func run(_ models: [String]) {
+        stop()
+        order = models
+        results = Dictionary(uniqueKeysWithValues: models.map { ($0, Outcome.running) })
+        let provider = settings.llmProvider
+        let key = apiKey
+        task = Task {
+            // 逐个测，避免并发请求触发限流，结果也更可比
+            for model in models {
+                guard !Task.isCancelled else { break }
+                do {
+                    let report = try await LLMConnectionTester.run(provider: provider, model: model, apiKey: key, settings: settings)
+                    results[model] = .success(report)
+                } catch is CancellationError {
+                    break
+                } catch {
+                    results[model] = .failure((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                }
+            }
+            task = nil
+        }
+    }
+
+    private func stop() {
+        task?.cancel()
+        task = nil
+        for (model, outcome) in results {
+            if case .running = outcome { results[model] = .failure("已停止") }
+        }
+    }
+
+    private static func format(_ seconds: TimeInterval) -> String {
+        seconds < 1 ? "\(Int(seconds * 1000))ms" : String(format: "%.1fs", seconds)
+    }
+
+    private static func speedColor(_ firstToken: TimeInterval) -> Color {
+        switch firstToken {
+        case ..<1.5: return .green
+        case ..<4: return .orange
+        default: return .red
         }
     }
 }

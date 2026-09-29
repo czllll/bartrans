@@ -1,104 +1,195 @@
 import Foundation
 
 private enum LLMHTTP {
+    /// 等待首个字节的超时；流式响应开始后不再受限于总时长。
     static let requestTimeout: TimeInterval = 15
 
-    static func post(url: URL, headers: [String: String], body: [String: Any]) async throws -> Data {
+    static func makeRequest(url: URL, headers: [String: String], body: [String: Any]) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch let error as URLError where error.code == .timedOut {
-            throw TranslationError.timeout
-        } catch {
-            throw TranslationError.network(error.localizedDescription)
+    /// 发起 SSE 请求，逐个产出 `data:` 行解析后的 JSON 对象。
+    static func events(for request: URLRequest) -> AsyncThrowingStream<[String: Any], Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response): (URLSession.AsyncBytes, URLResponse)
+                    do {
+                        (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    } catch let error as URLError where error.code == .timedOut {
+                        throw TranslationError.timeout
+                    } catch let error as URLError where error.code == .cancelled {
+                        throw CancellationError()
+                    } catch {
+                        throw TranslationError.network(error.localizedDescription)
+                    }
+
+                    guard let http = response as? HTTPURLResponse else {
+                        throw TranslationError.invalidResponse
+                    }
+                    guard (200...299).contains(http.statusCode) else {
+                        var data = Data()
+                        for try await byte in bytes { data.append(byte) }
+                        throw TranslationError.network(errorMessage(from: data) ?? "HTTP \(http.statusCode)")
+                    }
+
+                    for try await line in bytes.lines {
+                        guard line.hasPrefix("data:") else { continue }
+                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                        if payload == "[DONE]" { break }
+                        guard
+                            let data = payload.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
+                        if let message = errorMessage(from: json) {
+                            throw TranslationError.network(message)
+                        }
+                        continuation.yield(json)
+                    }
+                    continuation.finish()
+                } catch let error as URLError where error.code == .timedOut {
+                    continuation.finish(throwing: TranslationError.timeout)
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TranslationError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let detail = errorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
-            throw TranslationError.network(detail)
-        }
-
-        return data
     }
 
     private static func errorMessage(from data: Data) -> String? {
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let error = json["error"] as? [String: Any],
-            let message = error["message"] as? String
-        else { return nil }
-        return message
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return String(data: data, encoding: .utf8).flatMap { $0.isEmpty ? nil : String($0.prefix(200)) }
+        }
+        return errorMessage(from: json)
+    }
+
+    private static func errorMessage(from json: [String: Any]) -> String? {
+        if let error = json["error"] as? [String: Any], let message = error["message"] as? String {
+            return message
+        }
+        if let message = json["error"] as? String {
+            return message
+        }
+        return nil
     }
 }
 
-private func translationPrompt(source: String, target: String, text: String) -> String {
-    "将以下\(source)文本翻译为\(target)，只输出译文，不要任何解释或额外内容：\n\n\(text)"
+private enum LLMPrompt {
+    static func make(for request: TranslationRequest) -> String {
+        switch request.mode {
+        case .text:
+            return "将以下\(request.sourceName)文本翻译为\(request.targetName)，只输出译文，不要任何解释或额外内容：\n\n\(request.text)"
+        case .word:
+            return """
+            你是一部简明词典。请用\(request.targetName)解释下面这个\(request.sourceName)词语，严格按以下格式输出，不要任何多余说明：
+            第一行：音标或读音（没有就省略这一行）
+            之后每行一个义项："词性. 释义"，最多 4 行
+            最后一行：一个简短例句及其译文（用" — "分隔）
+
+            词语：\(request.text)
+            """
+        }
+    }
 }
 
-/// 调用 Anthropic Messages API (`api.anthropic.com/v1/messages`)。
+/// 把增量文本片段累积成"截至目前的完整译文"流。
+private func accumulate(
+    _ events: AsyncThrowingStream<[String: Any], Error>,
+    delta: @escaping ([String: Any]) -> String?
+) -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { continuation in
+        let task = Task {
+            var text = ""
+            do {
+                for try await event in events {
+                    guard let piece = delta(event), !piece.isEmpty else { continue }
+                    text += piece
+                    continuation.yield(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    throw TranslationError.invalidResponse
+                }
+                continuation.finish()
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
+        continuation.onTermination = { _ in task.cancel() }
+    }
+}
+
+private func failing(_ error: Error) -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { $0.finish(throwing: error) }
+}
+
+/// 调用 Anthropic Messages API (`api.anthropic.com/v1/messages`)，SSE 流式输出。
 final class AnthropicEngine: TranslationEngine {
     let name = "LLM (Anthropic)"
 
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let model = "claude-sonnet-4-6"
 
+    private let settings: AppSettings
     private let keychain: KeychainHelper
 
-    init(keychain: KeychainHelper = .shared) {
+    init(settings: AppSettings, keychain: KeychainHelper = .shared) {
+        self.settings = settings
         self.keychain = keychain
     }
 
-    func translate(_ text: String, from source: String, to target: String) async throws -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw TranslationError.emptyInput }
-
+    func translate(_ request: TranslationRequest) -> AsyncThrowingStream<String, Error> {
+        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return failing(TranslationError.emptyInput) }
         guard let apiKey = keychain.load(for: .anthropicAPIKey), !apiKey.isEmpty else {
-            throw TranslationError.apiKeyMissing
+            return failing(TranslationError.apiKeyMissing)
         }
 
+        var request = request
+        request.text = trimmed
+        let configuredModel = MainActor.assumeIsolated { settings.anthropicModel }
+        let model = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
+
         let body: [String: Any] = [
-            "model": Self.model,
-            "max_tokens": 1024,
+            "model": model.isEmpty ? AppSettings.defaultAnthropicModel : model,
+            "max_tokens": 4096,
+            "stream": true,
             "messages": [
-                ["role": "user", "content": translationPrompt(source: source, target: target, text: trimmed)]
+                ["role": "user", "content": LLMPrompt.make(for: request)]
             ]
         ]
 
-        let data = try await LLMHTTP.post(
-            url: Self.endpoint,
-            headers: ["x-api-key": apiKey, "anthropic-version": "2023-06-01"],
-            body: body
-        )
-
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let content = json["content"] as? [[String: Any]],
-            let firstBlock = content.first,
-            let translatedText = firstBlock["text"] as? String
-        else {
-            throw TranslationError.invalidResponse
+        do {
+            let urlRequest = try LLMHTTP.makeRequest(
+                url: Self.endpoint,
+                headers: ["x-api-key": apiKey, "anthropic-version": "2023-06-01"],
+                body: body
+            )
+            // 事件格式：{"type":"content_block_delta","delta":{"type":"text_delta","text":"…"}}
+            return accumulate(LLMHTTP.events(for: urlRequest)) { event in
+                guard
+                    event["type"] as? String == "content_block_delta",
+                    let delta = event["delta"] as? [String: Any],
+                    delta["type"] as? String == "text_delta"
+                else { return nil }
+                return delta["text"] as? String
+            }
+        } catch {
+            return failing(TranslationError.invalidResponse)
         }
-
-        return translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
 /// 调用任意 OpenAI Chat Completions 兼容接口
-/// （OpenAI 官方、Azure OpenAI、DeepSeek、Ollama/LM Studio 本地代理等）。
+/// （OpenAI 官方、Azure OpenAI、DeepSeek、Ollama/LM Studio 本地代理等），SSE 流式输出。
 /// Base URL 与模型名由用户在设置里填写。
 final class OpenAICompatibleEngine: TranslationEngine {
     let name = "LLM (OpenAI 兼容)"
@@ -111,53 +202,62 @@ final class OpenAICompatibleEngine: TranslationEngine {
         self.keychain = keychain
     }
 
-    func translate(_ text: String, from source: String, to target: String) async throws -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw TranslationError.emptyInput }
+    func translate(_ request: TranslationRequest) -> AsyncThrowingStream<String, Error> {
+        let trimmed = request.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return failing(TranslationError.emptyInput) }
 
-        guard let apiKey = keychain.load(for: .openAICompatibleAPIKey), !apiKey.isEmpty else {
-            throw TranslationError.apiKeyMissing
-        }
-
-        let (baseURL, model) = await MainActor.run { (settings.openAIBaseURL, settings.openAIModel) }
+        let (baseURL, model) = MainActor.assumeIsolated { (settings.openAIBaseURL, settings.openAIModel) }
         let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedBase.isEmpty, let endpoint = URL(string: trimmedBase.hasSuffix("/") ? trimmedBase + "chat/completions" : trimmedBase + "/chat/completions") else {
-            throw TranslationError.network("LLM Base URL 无效")
+        let isLocal = trimmedBase.contains("localhost") || trimmedBase.contains("127.0.0.1")
+
+        // 本地模型（Ollama / LM Studio）通常不需要 Key
+        let apiKey = keychain.load(for: .openAICompatibleAPIKey) ?? ""
+        guard !apiKey.isEmpty || isLocal else { return failing(TranslationError.apiKeyMissing) }
+
+        let endpointString = trimmedBase.hasSuffix("/") ? trimmedBase + "chat/completions" : trimmedBase + "/chat/completions"
+        guard !trimmedBase.isEmpty, let endpoint = URL(string: endpointString) else {
+            return failing(TranslationError.network("LLM Base URL 无效"))
         }
-        guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw TranslationError.network("尚未设置模型名称")
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else {
+            return failing(TranslationError.network("尚未设置模型名称"))
         }
 
+        var request = request
+        request.text = trimmed
         let body: [String: Any] = [
-            "model": model,
+            "model": trimmedModel,
+            "stream": true,
             "messages": [
-                ["role": "user", "content": translationPrompt(source: source, target: target, text: trimmed)]
+                ["role": "user", "content": LLMPrompt.make(for: request)]
             ]
         ]
 
-        let data = try await LLMHTTP.post(
-            url: endpoint,
-            headers: ["Authorization": "Bearer \(apiKey)"],
-            body: body
-        )
-
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let choices = json["choices"] as? [[String: Any]],
-            let firstChoice = choices.first,
-            let message = firstChoice["message"] as? [String: Any],
-            let translatedText = message["content"] as? String
-        else {
-            throw TranslationError.invalidResponse
+        do {
+            let headers = apiKey.isEmpty ? [:] : ["Authorization": "Bearer \(apiKey)"]
+            let urlRequest = try LLMHTTP.makeRequest(url: endpoint, headers: headers, body: body)
+            // 事件格式：{"choices":[{"delta":{"content":"…"}}]}
+            return accumulate(LLMHTTP.events(for: urlRequest)) { event in
+                guard
+                    let choices = event["choices"] as? [[String: Any]],
+                    let delta = choices.first?["delta"] as? [String: Any]
+                else { return nil }
+                return delta["content"] as? String
+            }
+        } catch {
+            return failing(TranslationError.invalidResponse)
         }
-
-        return translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
 /// 根据用户在设置里选择的 provider，把调用路由到 Anthropic 或 OpenAI 兼容引擎。
 final class LLMEngine: TranslationEngine {
-    let name = "LLM"
+    var name: String {
+        switch MainActor.assumeIsolated({ settings.llmProvider }) {
+        case .anthropic: return anthropic.name
+        case .openAICompatible: return openAICompatible.name
+        }
+    }
 
     private let anthropic: AnthropicEngine
     private let openAICompatible: OpenAICompatibleEngine
@@ -165,17 +265,16 @@ final class LLMEngine: TranslationEngine {
 
     init(settings: AppSettings, keychain: KeychainHelper = .shared) {
         self.settings = settings
-        self.anthropic = AnthropicEngine(keychain: keychain)
+        self.anthropic = AnthropicEngine(settings: settings, keychain: keychain)
         self.openAICompatible = OpenAICompatibleEngine(settings: settings, keychain: keychain)
     }
 
-    func translate(_ text: String, from source: String, to target: String) async throws -> String {
-        let provider = await MainActor.run { settings.llmProvider }
-        switch provider {
+    func translate(_ request: TranslationRequest) -> AsyncThrowingStream<String, Error> {
+        switch MainActor.assumeIsolated({ settings.llmProvider }) {
         case .anthropic:
-            return try await anthropic.translate(text, from: source, to: target)
+            return anthropic.translate(request)
         case .openAICompatible:
-            return try await openAICompatible.translate(text, from: source, to: target)
+            return openAICompatible.translate(request)
         }
     }
 }

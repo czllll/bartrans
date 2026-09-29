@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -7,26 +8,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var settingsWindow: NSWindow?
     private var eventMonitor: Any?
+    private var cancellables: Set<AnyCancellable> = []
 
     private let historyStore = HistoryStore()
     private let settings = AppSettings.shared
-    private lazy var systemTranslationBridge: Any? = {
-        if #available(macOS 15.0, *) {
-            return SystemTranslationBridge()
-        }
-        return nil
-    }()
+    private let permission = AccessibilityPermission.shared
+    private lazy var llmEngine = LLMEngine(settings: settings)
 
-    private lazy var viewModel: TranslationViewModel = {
-        let systemEngine: TranslationEngine
-        if #available(macOS 15.0, *), let bridge = systemTranslationBridge as? SystemTranslationBridge {
-            systemEngine = SystemEngine(bridge: bridge)
-        } else {
-            systemEngine = UnavailableEngine(name: "系统离线", reason: "系统翻译需要 macOS 15 或更高版本")
-        }
-        let llmEngine = LLMEngine(settings: settings)
-        return TranslationViewModel(systemEngine: systemEngine, llmEngine: llmEngine, historyStore: historyStore, settings: settings)
-    }()
+    /// 菜单栏面板：手动输入 / 粘贴翻译
+    private lazy var panelSystemEngine = makeSystemEngine()
+    private lazy var viewModel = TranslationViewModel(
+        systemEngine: panelSystemEngine.engine,
+        llmEngine: llmEngine,
+        historyStore: historyStore,
+        settings: settings
+    )
+
+    /// 全局划词
+    private lazy var selectionController = SelectionController(
+        settings: settings, historyStore: historyStore, llmEngine: llmEngine
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -44,21 +45,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 340, height: 430)
-
-        var rootView: AnyView {
-            let panel = TranslatePanelView(viewModel: viewModel) { [weak self] in
-                self?.openSettings()
-            }
-            if #available(macOS 15.0, *), let bridge = systemTranslationBridge as? SystemTranslationBridge {
-                return AnyView(
-                    panel.background(SystemTranslationBridgeView(bridge: bridge))
-                )
-            }
-            return AnyView(panel)
+        let panel = TranslatePanelView(viewModel: viewModel) { [weak self] in
+            self?.openSettings()
         }
-
-        popover.contentViewController = NSHostingController(rootView: rootView)
+        popover.contentViewController = NSHostingController(
+            rootView: panel.background(panelSystemEngine.hostView)
+        )
         self.popover = popover
+
+        selectionController.onRequestMainPanel = { [weak self] in self?.showPopover() }
+        selectionController.onOpenSettings = { [weak self] in self?.openSettings() }
+        selectionController.start()
+
+        // 划词需要辅助功能权限：首次启动时请求一次，之后在设置/菜单里提示
+        if settings.selectionEnabled && !permission.isTrusted {
+            permission.request()
+        }
+        permission.$isTrusted
+            .sink { [weak self] trusted in self?.updateStatusIcon(needsAttention: !trusted) }
+            .store(in: &cancellables)
     }
 
     /// 用 SwiftUI 矢量图形渲染菜单栏图标，作为 template image
@@ -72,6 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         image.isTemplate = true
         image.accessibilityDescription = "bartrans"
         return image
+    }
+
+    private func updateStatusIcon(needsAttention: Bool) {
+        statusItem?.button?.appearsDisabled = needsAttention && settings.selectionEnabled
+        statusItem?.button?.toolTip = needsAttention ? "bartrans：划词需要开启辅助功能权限" : "bartrans"
     }
 
     /// Accessory (无 Dock 图标) 应用默认没有主菜单，Cmd+C/V/X/A 这类
@@ -107,12 +117,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showStatusMenu()
         } else {
-            togglePopover(sender)
+            togglePopover()
         }
     }
 
+    // MARK: - Status menu
+
     private func showStatusMenu() {
         let menu = NSMenu()
+
+        if !permission.isTrusted {
+            let item = NSMenuItem(title: "⚠︎ 开启辅助功能权限以使用划词…", action: #selector(requestPermission), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+            menu.addItem(.separator())
+        }
+
+        let toggle = NSMenuItem(title: "划词翻译", action: #selector(toggleSelection), keyEquivalent: "")
+        toggle.target = self
+        toggle.state = settings.selectionEnabled ? .on : .off
+        menu.addItem(toggle)
+
+        // 右键菜单弹出时，前台 App 仍然是用户正在用的那个
+        if let app = NSWorkspace.shared.frontmostApplication,
+           let bundleID = app.bundleIdentifier,
+           bundleID != Bundle.main.bundleIdentifier {
+            let name = app.localizedName ?? bundleID
+            let excluded = settings.isExcluded(bundleID: bundleID)
+            let item = NSMenuItem(
+                title: excluded ? "在「\(name)」中恢复划词" : "在「\(name)」中停用划词",
+                action: #selector(toggleExcludedApp(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = bundleID
+            item.isEnabled = settings.selectionEnabled
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "设置…", action: #selector(settingsMenuAction), keyEquivalent: ",")
         settingsItem.target = self
@@ -128,29 +171,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = nil
     }
 
+    @objc private func requestPermission() {
+        permission.request()
+        permission.openSystemSettings()
+    }
+
+    @objc private func toggleSelection() {
+        settings.selectionEnabled.toggle()
+        updateStatusIcon(needsAttention: !permission.isTrusted)
+    }
+
+    @objc private func toggleExcludedApp(_ sender: NSMenuItem) {
+        guard let bundleID = sender.representedObject as? String else { return }
+        settings.setExcluded(!settings.isExcluded(bundleID: bundleID), bundleID: bundleID)
+    }
+
     @objc private func settingsMenuAction() {
         openSettings()
     }
 
-    private func togglePopover(_ sender: NSStatusBarButton) {
-        guard let popover, let button = statusItem?.button else { return }
+    // MARK: - Popover
 
-        if popover.isShown {
-            popover.performClose(sender)
-            removeEventMonitor()
+    private func togglePopover() {
+        if popover?.isShown == true {
+            closePopover()
         } else {
-            viewModel.prefillFromClipboard()
-            NSApp.activate(ignoringOtherApps: true)
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
-            addEventMonitor()
+            showPopover()
         }
     }
 
+    private func showPopover() {
+        guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        viewModel.prefillFromClipboard()
+        NSApp.activate()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        NotificationCenter.default.post(name: .focusTranslatorInput, object: nil)
+        addEventMonitor()
+    }
+
+    private func closePopover() {
+        popover?.performClose(nil)
+        removeEventMonitor()
+    }
+
     private func addEventMonitor() {
+        removeEventMonitor()
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.popover?.performClose(nil)
-            self?.removeEventMonitor()
+            MainActor.assumeIsolated { self?.closePopover() }
         }
     }
 
@@ -161,32 +229,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         eventMonitor = nil
     }
 
+    // MARK: - Settings
+
     private func openSettings() {
+        closePopover()
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             return
         }
 
-        let hosting = NSHostingController(rootView: SettingsView(settings: settings))
+        let hosting = NSHostingController(rootView: SettingsView(settings: settings, permission: permission))
         let window = NSWindow(contentViewController: hosting)
-        window.title = "设置"
+        window.title = "bartrans 设置"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.center()
         self.settingsWindow = window
 
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-/// 目标系统版本低于 Translation framework 要求时的降级占位引擎。
-private struct UnavailableEngine: TranslationEngine {
-    let name: String
-    let reason: String
-
-    func translate(_ text: String, from source: String, to target: String) async throws -> String {
-        throw TranslationError.network(reason)
+        NSApp.activate()
     }
 }

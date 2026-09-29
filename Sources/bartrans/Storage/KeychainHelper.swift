@@ -12,14 +12,18 @@ final class KeychainHelper {
     private let service = "com.transpop.bartrans.llmkey"
     private let legacyService = "com.transpop.menubartranslator.llmkey"
 
-    private init() {
-        migrateLegacyKeysIfNeeded()
-    }
+    /// 迁移推迟到第一次真正读写 Key 时再做：App 启动时不碰钥匙串，
+    /// 避免签名变化后一启动就弹出钥匙串授权框。
+    private var didMigrate = false
+
+    private init() {}
 
     /// 改名前用的是 com.transpop.menubartranslator.llmkey 这个 service，
     /// 改名后老 Key 并没有丢，只是存在旧 service 名下；这里把它们
     /// 搬到新 service，搬完就清理旧条目，只做一次。
     private func migrateLegacyKeysIfNeeded() {
+        guard !didMigrate else { return }
+        didMigrate = true
         for account in [KeychainAccount.anthropicAPIKey, .openAICompatibleAPIKey] {
             guard load(for: account) == nil, let legacyValue = load(for: account, service: legacyService) else {
                 continue
@@ -30,6 +34,7 @@ final class KeychainHelper {
     }
 
     func save(_ key: String, for account: KeychainAccount) {
+        migrateLegacyKeysIfNeeded()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -48,6 +53,7 @@ final class KeychainHelper {
     }
 
     func load(for account: KeychainAccount, service: String? = nil) -> String? {
+        if service == nil { migrateLegacyKeysIfNeeded() }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service ?? self.service,

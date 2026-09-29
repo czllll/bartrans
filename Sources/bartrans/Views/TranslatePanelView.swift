@@ -42,7 +42,6 @@ struct TranslatePanelView: View {
             }
         }
         .onAppear {
-            viewModel.prefillFromClipboard()
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .focusTranslatorInput, object: nil)
             }
@@ -113,6 +112,7 @@ struct TranslatePanelView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
+        .onChange(of: viewModel.selectedEngine) { viewModel.retranslateIfNeeded() }
     }
 
     private var directionDivider: some View {
@@ -120,8 +120,9 @@ struct TranslatePanelView: View {
             Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 1)
             Button {
                 viewModel.toggleDirection()
+                viewModel.retranslateIfNeeded()
             } label: {
-                Label(viewModel.direction.label, systemImage: "arrow.up.arrow.down")
+                Label(viewModel.directionLabel, systemImage: "arrow.up.arrow.down")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
             }
             .buttonStyle(.bordered)
@@ -154,6 +155,7 @@ struct TranslatePanelView: View {
             ScrollView {
                 Text(viewModel.outputText.isEmpty ? "翻译结果将显示在这里" : viewModel.outputText)
                     .font(.system(size: 13))
+                    .textSelection(.enabled)
                     .foregroundStyle(viewModel.outputText.isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 28))
@@ -183,6 +185,10 @@ struct TranslatePanelView: View {
                 Text("翻译中…")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+            } else {
+                Text(shortcutHint)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
 
             Spacer()
@@ -193,10 +199,14 @@ struct TranslatePanelView: View {
                 Label("翻译", systemImage: "return")
                     .font(.system(size: 12, weight: .medium))
             }
-            .keyboardShortcut(.return, modifiers: [])
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.isTranslating)
         }
+    }
+
+    private var shortcutHint: String {
+        let hotKey = viewModel.settings.hotKey
+        let prefix = hotKey == .none ? "" : "\(hotKey.label.replacingOccurrences(of: " ", with: "")) 划词翻译 · "
+        return prefix + "↩ 翻译 · ⇧↩ 换行"
     }
 
     private func flashCopied() {

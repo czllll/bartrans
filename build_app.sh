@@ -21,8 +21,14 @@ if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 fi
 
-echo "==> codesigning (ad-hoc, with entitlements)"
-codesign --force --deep --sign - \
+# 划词依赖「辅助功能」权限，而系统是按代码签名记住授权的：
+# ad-hoc 签名每次构建都会变，导致每次重新构建后都要重新授权。
+# 所以优先使用钥匙串里的开发者证书（可用 SIGN_IDENTITY 指定），找不到才退回 ad-hoc。
+SIGN_IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+
+echo "==> codesigning (identity: $SIGN_IDENTITY)"
+codesign --force --deep --sign "$SIGN_IDENTITY" \
     --entitlements "Resources/bartrans.entitlements" \
     "$APP_BUNDLE"
 

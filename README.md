@@ -1,6 +1,6 @@
 # bartrans
 
-按 `menubar-translator-prd.md` 实现的菜单栏翻译工具，纯 Swift + SwiftUI/AppKit，无第三方依赖。
+macOS 全局划词翻译 / 查词工具，交互类似 PopClip：在任意 App 里选中文字，选区旁边弹出一个小工具条，点「翻译」就地显示结果。纯 Swift + SwiftUI/AppKit，无第三方依赖。
 
 ## 构建 & 运行
 
@@ -9,29 +9,52 @@
 open .build/release/bartrans.app
 ```
 
-首次启动只会出现在菜单栏（无 Dock 图标），点击图标弹出翻译面板。
+启动后只出现在菜单栏（无 Dock 图标）。第一次启动会请求「辅助功能」权限，划词功能依赖它。
 
-也可以用 `swift run` 直接跑调试版本（不经过 app 打包，Keychain/沙盒行为等同）。
+`build_app.sh` 会优先使用钥匙串里的 Apple Development / Developer ID 证书签名（可用 `SIGN_IDENTITY` 环境变量指定），没有证书才退回 ad-hoc。**这一点很重要**：系统按代码签名记住辅助功能授权，ad-hoc 签名每次构建都会变，每次重新构建都得重新授权。
 
 ## 功能一览
 
-- 菜单栏图标点击弹出翻译面板；点击"历史"在同一面板内翻转（flip）到历史记录，而不是叠加新窗口
-- 输入自动识别中/英文并决定翻译方向，也可手动切换强制方向
-- 引擎可选「系统离线」（`Translation` 框架）或「LLM」
-- LLM 支持 **Anthropic** 或任意 **OpenAI 兼容** 接口（OpenAI 官方 / Azure OpenAI / DeepSeek / Ollama、LM Studio 本地代理等），Base URL、模型名、API Key 均可在设置里配置，Key 存 Keychain
-- 品牌图形（菜单栏图标 + 面板 Logo）用 SwiftUI 矢量图形实时绘制，无外部美术资源（`Views/BarTransLogo.swift`）
+### 划词（2.0 新增）
 
-## 与 PRD 的已知差异
+- **选中即弹出**：拖选、双击选词、三击选段、Shift+点击扩展选区都会触发，工具条浮在选区上方：`翻译 / 复制 / 搜索 / 朗读`
+- **两种弹出方式**：「显示工具条」（PopClip 式）或「直接翻译」（选中后直接弹出结果）
+- **快捷键**：默认 `⌥D` 翻译当前选中的文字；没有选中文字时打开菜单栏面板手动输入
+- **结果浮窗**：
+  - 译文流式逐字显示（LLM），面板向下展开，不遮挡选区
+  - 单词 / 短语自动进入**查词模式**：大号原词 + 发音；LLM 会给出音标、词性、释义、例句；同时附上 macOS「词典」App 的离线释义，可一键在词典中打开
+  - 可切换方向、引擎，自动重新翻译；可固定（点别处不关闭），可拖动
+  - `朗读` / `复制` / `替换`（用译文替换原文，适合写邮件时中译英）
+  - 点击浮窗外任意位置或按 `Esc` 关闭
+- **读取选中文字**：优先用辅助功能 API（零副作用）；Chrome、VS Code 等读不到时退回「模拟 ⌘C → 读剪贴板 → 恢复剪贴板」（可在设置里关闭）。密码框（安全输入状态）不会触发
+- **按 App 停用**：右键菜单栏图标 →「在『某 App』中停用划词」
 
-- **最低系统版本**：PRD 写的是 macOS 13，但 `Translation` 框架（系统离线翻译）实际要求 **macOS 15+**，`SMAppService` 才是 13+。已按 15+ 实现，`Info.plist` 的 `LSMinimumSystemVersion` 设为 15.0；低于该版本时系统引擎会给出友好错误提示而不是崩溃。
-- **系统翻译调用方式**：`Translation` 框架的编程式 API 必须挂在存活的 SwiftUI 视图上（`.translationTask`），因此用了一个不可见的桥接 view（`SystemTranslationBridgeView`）把它包装成协议里要求的普通 async 函数，对 `TranslationEngine` 协议的调用方是透明的。
-- **回车 vs Shift+回车**：SwiftUI 原生 `TextEditor` 无法区分这两种按键，实现里用了一个包装 `NSTextView` 的 `SubmitTextView` 来做（`Views/SubmitTextView.swift`）。
-- **LLM provider**：PRD 原本只要求 Anthropic，现已扩展为可插拔的 Anthropic / OpenAI 兼容双 provider（`Engines/LLMEngine.swift`）。
+### 菜单栏面板
 
-## 待验证（需要真实 GUI 环境）
+- 点击菜单栏图标弹出翻译面板，自动填入剪贴板文本（只在剪贴板变化后才覆盖，不会冲掉正在编辑的内容）
+- 回车翻译，Shift+回车换行；「历史」翻转到历史记录
 
-- 点击菜单栏图标 → 弹出面板 → 剪贴板自动填充 → 翻译 → 复制，完整走一遍
-- 历史记录的翻转动画、返回后状态是否正确保留
-- 系统离线引擎需要在「系统设置 → 翻译」里下载中英语言包后才能工作
-- LLM 引擎分别测试 Anthropic 和 OpenAI 兼容两种 provider
-- 登录启动开关（`SMAppService`）需要实际登出登入或重启验证
+### 翻译引擎
+
+- 「系统离线」：Apple `Translation` 框架，免费、离线
+- 「LLM」：**Anthropic**（模型名可配置）或任意 **OpenAI 兼容** 接口（OpenAI / DeepSeek / Ollama / LM Studio 等，本地地址可不填 Key）；SSE 流式输出，Key 存 Keychain
+- 语言：设置「母语」和「常用外语」，自动识别时外文 → 母语、母语 → 外语；支持中（简/繁）英日韩法德西俄
+
+## 与 1.x 的差异
+
+- **关闭了 App Sandbox**：沙盒内无法读取其它 App 的选中文字、无法模拟按键。首次启动会把旧沙盒容器里的设置和历史记录迁移过来
+- 签名方式变化后，第一次用 LLM 引擎时系统会询问是否允许访问钥匙串里的 API Key，选「始终允许」即可
+- 修复：系统翻译连续两次翻译同一语言方向时第二次会卡住（`TranslationSession.Configuration` 需要 `invalidate()` 才会重跑）
+- 修复：快速连续翻译时结果互相覆盖（现在会取消上一次请求）
+
+## 代码结构
+
+```
+Sources/bartrans/
+├── App/            入口、菜单栏图标 / 面板 / 右键菜单
+├── Selection/      划词：全局鼠标监听、读取选中文字、辅助功能权限、全局快捷键
+├── Popup/          划词工具条、结果浮窗、浮动面板、调度（SelectionController）
+├── Engines/        引擎协议、系统翻译、LLM（流式）、语言识别、词典 / 朗读
+├── Storage/        设置、历史、Keychain
+└── Views/          菜单栏面板、设置、历史
+```

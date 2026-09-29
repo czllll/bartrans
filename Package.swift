@@ -1,15 +1,16 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "bartrans",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     targets: [
         .executableTarget(
             name: "bartrans",
-            path: "Sources/bartrans"
+            path: "Sources/bartrans",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )

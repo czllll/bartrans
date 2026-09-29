@@ -168,7 +168,7 @@ private struct TranslationSettings: View {
                 languagePicker("常用外语", selection: $settings.secondaryLanguage)
                 Picker("默认引擎", selection: $settings.defaultEngine) {
                     ForEach(EngineKind.allCases) { engine in
-                        Label(engine.label, systemImage: engine.icon).tag(engine)
+                        Text(engine.label).tag(engine)
                     }
                 }
             }

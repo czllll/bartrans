@@ -194,8 +194,10 @@ struct EngineMenu: View {
     var body: some View {
         PopUpMenuButton(items: menuItems) {
             HStack(spacing: 4) {
-                Image(systemName: viewModel.selectedEngine.icon)
-                    .font(.system(size: 9.5, weight: .semibold))
+                if let icon = viewModel.selectedEngine.icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 9.5, weight: .semibold))
+                }
                 Text(viewModel.engineCaption)
                     .lineLimit(1)
                     .frame(maxWidth: 150)
@@ -217,7 +219,7 @@ struct EngineMenu: View {
             items.append(.header(provider.label))
             for model in settings.models(for: provider) {
                 let isOn = viewModel.selectedEngine == .llm && settings.llmProvider == provider && settings.currentModel(for: provider) == model
-                items.append(.init(title: model, systemImage: "sparkles", isOn: isOn) {
+                items.append(.init(title: model, isOn: isOn) {
                     settings.llmProvider = provider
                     settings.setCurrentModel(model, for: provider)
                     select(.llm)
@@ -242,10 +244,10 @@ struct EngineMenu: View {
 }
 
 extension EngineKind {
-    var icon: String {
+    var icon: String? {
         switch self {
         case .system: return "apple.logo"
-        case .llm: return "sparkles"
+        case .llm: return nil
         }
     }
 }

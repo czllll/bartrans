@@ -16,6 +16,11 @@
 </p>
 
 <p align="center">
+  <a href="https://bartrans.met4.org">官网 bartrans.met4.org</a> ·
+  <a href="https://github.com/czllll/bartrans/releases/latest">下载最新版</a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/action-bar.png" height="60" alt="划词工具条"><br>
   <img src="docs/screenshots/lookup.png" width="420" alt="查词">
   <img src="docs/screenshots/translate-dark.png" width="420" alt="段落翻译（深色）">
@@ -50,7 +55,7 @@
 
 ### 下载
 
-在 [Releases](https://github.com/czllll/bartrans/releases) 下载 `bartrans-macOS.dmg`，把 bartrans 拖进「应用程序」。
+在 [Releases](https://github.com/czllll/bartrans/releases) 或 [官网](https://bartrans.met4.org) 下载 `bartrans-macOS.dmg`，把 bartrans 拖进「应用程序」。
 
 应用没有经过 Apple 公证，首次打开如果提示"无法验证开发者"，在终端执行：
 
